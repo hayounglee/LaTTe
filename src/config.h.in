@@ -1,0 +1,362 @@
+/* config.h.in
+   Configuration header template
+   
+   Written by: Yoo C. Chung <chungyc@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+/* Define if using alloca.c.  */
+#undef C_ALLOCA
+
+/* Define if type char is unsigned and you are not using gcc.  */
+#ifndef __CHAR_UNSIGNED__
+#undef __CHAR_UNSIGNED__
+#endif
+
+/* Define to empty if the keyword does not work.  */
+#undef const
+
+/* Define to one of _getb67, GETB67, getb67 for Cray-2 and Cray-YMP systems.
+   This function is required for alloca.c support on those systems.  */
+#undef CRAY_STACKSEG_END
+
+/* Define if you have alloca, as a function or macro.  */
+#undef HAVE_ALLOCA
+
+/* Define if you have <alloca.h> and it should be used (not on Ultrix).  */
+#undef HAVE_ALLOCA_H
+
+/* Define if you have a working `mmap' system call.  */
+#undef HAVE_MMAP
+
+/* Define if you have the strftime function.  */
+#undef HAVE_STRFTIME
+
+/* Define as __inline if that's what the C compiler calls it.  */
+#undef inline
+
+/* Define to `long' if <sys/types.h> doesn't define.  */
+#undef off_t
+
+/* Define as the return type of signal handlers (int or void).  */
+#undef RETSIGTYPE
+
+/* Define to `unsigned' if <sys/types.h> doesn't define.  */
+#undef size_t
+
+/* If using the C implementation of alloca, define if you know the
+   direction of stack growth for your system; otherwise it will be
+   automatically deduced at run-time.
+ STACK_DIRECTION > 0 => grows toward higher addresses
+ STACK_DIRECTION < 0 => grows toward lower addresses
+ STACK_DIRECTION = 0 => direction of growth unknown
+ */
+#undef STACK_DIRECTION
+
+/* Define if you have the ANSI C header files.  */
+#undef STDC_HEADERS
+
+/* Define if you can safely include both <sys/time.h> and <time.h>.  */
+#undef TIME_WITH_SYS_TIME
+
+/* Define if your <sys/time.h> declares struct tm.  */
+#undef TM_IN_SYS_TIME
+
+/* Define if your processor stores words with the most significant
+   byte first (like Motorola and SPARC, unlike Intel and VAX).  */
+#undef WORDS_BIGENDIAN
+
+/* The number of bytes in a __int64.  */
+#undef SIZEOF___INT64
+
+/* The number of bytes in a int.  */
+#undef SIZEOF_INT
+
+/* The number of bytes in a long.  */
+#undef SIZEOF_LONG
+
+/* The number of bytes in a long long.  */
+#undef SIZEOF_LONG_LONG
+
+/* The number of bytes in a short.  */
+#undef SIZEOF_SHORT
+
+/* The number of bytes in a void*.  */
+#undef SIZEOF_VOIDP
+
+/* Define if you have the alarm function.  */
+#undef HAVE_ALARM
+
+/* Define if you have the ceil function.  */
+#undef HAVE_CEIL
+
+/* Define if you have the dlerror function.  */
+#undef HAVE_DLERROR
+
+/* Define if you have the dlopen function.  */
+#undef HAVE_DLOPEN
+
+/* Define if you have the drem function.  */
+#undef HAVE_DREM
+
+/* Define if you have the execve function.  */
+#undef HAVE_EXECVE
+
+/* Define if you have the fcntl function.  */
+#undef HAVE_FCNTL
+
+/* Define if you have the finite function.  */
+#undef HAVE_FINITE
+
+/* Define if you have the floor function.  */
+#undef HAVE_FLOOR
+
+/* Define if you have the fmod function.  */
+#undef HAVE_FMOD
+
+/* Define if you have the fork function.  */
+#undef HAVE_FORK
+
+/* Define if you have the ftime function.  */
+#undef HAVE_FTIME
+
+/* Define if you have the getcwd function.  */
+#undef HAVE_GETCWD
+
+/* Define if you have the getpagesize function.  */
+#undef HAVE_GETPAGESIZE
+
+/* Define if you have the getsockname function.  */
+#undef HAVE_GETSOCKNAME
+
+/* Define if you have the gettimeofday function.  */
+#undef HAVE_GETTIMEOFDAY
+
+/* Define if you have the getuid function.  */
+#undef HAVE_GETUID
+
+/* Define if you have the getwd function.  */
+#undef HAVE_GETWD
+
+/* Define if you have the hstrerror function.  */
+#undef HAVE_HSTRERROR
+
+/* Define if you have the ioctl function.  */
+#undef HAVE_IOCTL
+
+/* Define if you have the isinf function.  */
+#undef HAVE_ISINF
+
+/* Define if you have the isnan function.  */
+#undef HAVE_ISNAN
+
+/* Define if you have the kill function.  */
+#undef HAVE_KILL
+
+/* Define if you have the memcpy function.  */
+#undef HAVE_MEMCPY
+
+/* Define if you have the memmove function.  */
+#undef HAVE_MEMMOVE
+
+/* Define if you have the mkdir function.  */
+#undef HAVE_MKDIR
+
+/* Define if you have the remainder function.  */
+#undef HAVE_REMAINDER
+
+/* Define if you have the remainderf function.  */
+#undef HAVE_REMAINDERF
+
+/* Define if you have the rint function.  */
+#undef HAVE_RINT
+
+/* Define if you have the select function.  */
+#undef HAVE_SELECT
+
+/* Define if you have the setitimer function.  */
+#undef HAVE_SETITIMER
+
+/* Define if you have the sigaction function.  */
+#undef HAVE_SIGACTION
+
+/* Define if you have the sigaddset function.  */
+#undef HAVE_SIGADDSET
+
+/* Define if you have the sigemptyset function.  */
+#undef HAVE_SIGEMPTYSET
+
+/* Define if you have the signal function.  */
+#undef HAVE_SIGNAL
+
+/* Define if you have the sigprocmask function.  */
+#undef HAVE_SIGPROCMASK
+
+/* Define if you have the sigsetmask function.  */
+#undef HAVE_SIGSETMASK
+
+/* Define if you have the socket function.  */
+#undef HAVE_SOCKET
+
+/* Define if you have the strdup function.  */
+#undef HAVE_STRDUP
+
+/* Define if you have the strerror function.  */
+#undef HAVE_STRERROR
+
+/* Define if you have the strtod function.  */
+#undef HAVE_STRTOD
+
+/* Define if you have the uname function.  */
+#undef HAVE_UNAME
+
+/* Define if you have the waitpid function.  */
+#undef HAVE_WAITPID
+
+/* Define if you have the <alloca.h> header file.  */
+#undef HAVE_ALLOCA_H
+
+/* Define if you have the <asm/sigcontext.h> header file.  */
+#undef HAVE_ASM_SIGCONTEXT_H
+
+/* Define if you have the <asm/signal.h> header file.  */
+#undef HAVE_ASM_SIGNAL_H
+
+/* Define if you have the <bsd/libc.h> header file.  */
+#undef HAVE_BSD_LIBC_H
+
+/* Define if you have the <dirent.h> header file.  */
+#undef HAVE_DIRENT_H
+
+/* Define if you have the <dl.h> header file.  */
+#undef HAVE_DL_H
+
+/* Define if you have the <dlfcn.h> header file.  */
+#undef HAVE_DLFCN_H
+
+/* Define if you have the <fcntl.h> header file.  */
+#undef HAVE_FCNTL_H
+
+/* Define if you have the <features.h> header file.  */
+#undef HAVE_FEATURES_H
+
+/* Define if you have the <mach-o/rld.h> header file.  */
+#undef HAVE_MACH_O_RLD_H
+
+/* Define if you have the <malloc.h> header file.  */
+#undef HAVE_MALLOC_H
+
+/* Define if you have the <memory.h> header file.  */
+#undef HAVE_MEMORY_H
+
+/* Define if you have the <ndir.h> header file.  */
+#undef HAVE_NDIR_H
+
+/* Define if you have the <pwd.h> header file.  */
+#undef HAVE_PWD_H
+
+/* Define if you have the <sigcontext.h> header file.  */
+#undef HAVE_SIGCONTEXT_H
+
+/* Define if you have the <signal.h> header file.  */
+#undef HAVE_SIGNAL_H
+
+/* Define if you have the <string.h> header file.  */
+#undef HAVE_STRING_H
+
+/* Define if you have the <sys/dir.h> header file.  */
+#undef HAVE_SYS_DIR_H
+
+/* Define if you have the <sys/filio.h> header file.  */
+#undef HAVE_SYS_FILIO_H
+
+/* Define if you have the <sys/ioctl.h> header file.  */
+#undef HAVE_SYS_IOCTL_H
+
+/* Define if you have the <sys/ndir.h> header file.  */
+#undef HAVE_SYS_NDIR_H
+
+/* Define if you have the <sys/param.h> header file.  */
+#undef HAVE_SYS_PARAM_H
+
+/* Define if you have the <sys/select.h> header file.  */
+#undef HAVE_SYS_SELECT_H
+
+/* Define if you have the <sys/socket.h> header file.  */
+#undef HAVE_SYS_SOCKET_H
+
+/* Define if you have the <sys/stat.h> header file.  */
+#undef HAVE_SYS_STAT_H
+
+/* Define if you have the <sys/time.h> header file.  */
+#undef HAVE_SYS_TIME_H
+
+/* Define if you have the <sys/types.h> header file.  */
+#undef HAVE_SYS_TYPES_H
+
+/* Define if you have the <sys/utsname.h> header file.  */
+#undef HAVE_SYS_UTSNAME_H
+
+/* Define if you have the <unistd.h> header file.  */
+#undef HAVE_UNISTD_H
+
+/* Define if you have the <zlib.h> header file.  */
+#undef HAVE_ZLIB_H
+
+
+/**********************************************************************/
+/*                   LaTTe specific definitions.                      */
+/**********************************************************************/
+
+/* Name of virtual machine. */
+#undef VMNAME
+
+/* Version of virtual machine. */
+#undef VMVERSION
+
+/* Use the bytecode interpreter. */
+#undef INTERPRETER
+
+/* Use the bytecode translator. */
+#undef TRANSLATOR
+
+/* Use the VLIW simulator. */
+#undef SIMULATOR
+
+/* Use customization. */
+#undef CUSTOMIZATION
+
+/* Use inline cache. */
+#undef INLINE_CACHE
+
+/* Collect call site information. */
+#undef USE_CALL_SITE_INFO
+
+/* Use type analysis. */
+#undef TYPE_ANALYSIS
+
+/* Do virtual call profiling. */
+#undef VIRTUAL_PROFILE
+
+/* Do bytecode profiling. */
+#undef BYTECODE_PROFILE
+
+/* Do not use shared libraries. */
+#undef NO_SHARED_LIBRARIES
+
+/* Suffix for shared libraries. */
+#undef LIBRARYSUFFIX
+
+/* Have library z. */
+#undef HAVE_LIBZ
+
+/* Define ssize_t. */
+#undef ssize_t
+
+/* Use 64-bit integer registers. */
+#undef USE_64_BIT_INTEGER_REGISTER
+
+#include "config-def.h"

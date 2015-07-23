@@ -1,0 +1,200 @@
+/* utils.ic
+   
+   Inline methods of Queue and Linked List
+   
+   Written by: Junpyo Lee <walker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+INLINE iqueue * 
+iq_alloc(void) 
+{
+    return (iqueue *)FMA_calloc(sizeof(iqueue));
+}
+
+INLINE iqueue * 
+iq_init(iqueue *q, int sz) 
+{
+    assert(q);
+    q->a = (int *)FMA_calloc(sizeof(int) * sz);
+    q->max_size = sz;
+    q->size = 0;
+    q->head = 0;    
+    return q;
+}
+
+INLINE void 
+iq_enq(iqueue *q, int v) 
+{
+    assert(q->size <= q->max_size);
+    q->a[(q->head + q->size) % q->max_size] = v;
+    q->size++;
+}
+
+INLINE int 
+iq_deq(iqueue *q) 
+{
+    int ret;
+    assert(q->size > 0);
+    ret = q->a[q->head];
+    q->head = (q->head + 1) % q->max_size;
+    q->size--;
+    return ret;
+}
+
+INLINE int 
+iq_size(iqueue *q) 
+{
+    return q->size;
+}
+
+
+INLINE ilist *
+ilist_get_next(ilist *i) { assert(i); return i->next; }
+INLINE int
+ilist_get_value(ilist *i) { assert(i); return i->value; }
+INLINE void
+ilist_set_next(ilist *i, ilist *n) { assert(i); i->next = n; }
+INLINE void
+ilist_set_value(ilist *i,int v)  { assert(i); i->value = v; }
+
+INLINE ilist * 
+ilist_alloc(int value, ilist * next) 
+{
+    ilist * ret = (ilist *)FMA_calloc(sizeof(ilist));
+
+    ilist_set_value(ret,value);
+    ilist_set_next(ret,next);
+
+    return ret;
+}
+
+INLINE void 
+ilist_free(ilist * s) 
+{
+
+    while (s) {
+        ilist * t = ilist_get_next(s);
+//        free(s);
+        s = t;
+    }    
+}
+
+INLINE int 
+ilist_size(ilist * l) 
+{
+    int size = 0;
+
+    for (; l; l = ilist_get_next(l)) {
+        size ++;
+    }
+
+    return size;
+}
+
+INLINE bool 
+ilist_find(ilist *l, int value) 
+{
+    if (l) {
+        for (; l ; l = ilist_get_next(l)) {
+            if (ilist_get_value(l) == value) {
+                return true;
+            } else if (ilist_get_value(l) < value) {
+                return false;
+            }
+        }
+    }
+
+    return false;
+}
+
+INLINE ilist * 
+ilist_insert(ilist *l, int val) 
+{
+    return ilist_alloc(val, l);
+}
+
+INLINE ilist * 
+ilist_insert_sorted(ilist * l, int value) 
+{
+    if (l) {
+        ilist n;        // trick for header node.
+        ilist *p = &n;  //
+        ilist *ret;
+
+        ilist_set_next(p,l);
+
+        for (; ilist_get_next(p) != NULL; p = ilist_get_next(p)) {
+            if (ilist_get_value(ilist_get_next(p)) == value) {
+                // already exist
+                return l;
+            } else if (ilist_get_value(ilist_get_next(p)) < value) {
+
+                ret = ilist_alloc(value, ilist_get_next(p));
+                ilist_set_next(p,ret);
+                
+                return n.next;
+            }
+        }
+
+        ret = ilist_alloc(value, NULL);
+        ilist_set_next(p,ret);
+
+        return n.next;
+    }
+
+    return ilist_alloc(value, NULL);
+}
+
+INLINE ilist * 
+ilist_push(ilist * l, int value) 
+{
+    return ilist_insert(l, value);
+}
+INLINE ilist * 
+ilist_enq(ilist * l, int value) 
+{
+    assert(0 && "not implemented."); 
+    return NULL;
+}
+INLINE ilist * 
+ilist_pop(ilist *l, int *pvalue) 
+{
+    *pvalue = ilist_get_value(l);
+    return ilist_get_next(l);
+}
+INLINE ilist * 
+ilist_deq(ilist *l, int *pvalue) 
+{
+    return ilist_pop(l, pvalue);
+}
+
+INLINE ilist * 
+ilist_erase(ilist * l, int value) 
+{
+    ilist n; 
+    ilist *p = &n;  
+    
+    assert(l); 
+
+    p->next = l;
+
+    for (; ilist_get_next(p) ; p = ilist_get_next(p)) {
+        if (ilist_get_value(ilist_get_next(p)) == value) {
+
+//            ilist * old = ilist_get_next(p);
+
+            ilist_set_next(p, ilist_get_next(ilist_get_next(p)));
+//            free(old);
+
+            return ilist_get_next(&n);
+
+        }
+    }
+
+    return l;
+}
+

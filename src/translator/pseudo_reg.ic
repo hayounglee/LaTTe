@@ -1,0 +1,125 @@
+/* -*- mode: C -*-
+   pseudo_reg.ic
+   
+   pseudo register (variable) related inline functions
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+/* avoid include header files */
+struct InlineGraph;
+struct CFG;
+
+extern int CFG_GetNumOfLocalVars(struct CFG *cfg);
+extern int CFG_GetNumOfStackVars(struct CFG *cfg);
+extern char *Reg_GetName(int reg);
+
+#define STORAGE_TYPE_MASK       0xFE000000
+#define TYPE_MASK               0x01FC0000
+#define VAR_NUM_MASK            0x0003FFFF
+
+#define STORAGE_TYPE_SHIFT_SIZE 25
+#define TYPE_SHIFT_SIZE         18
+
+#define INVALID_REG -1
+
+/* 64 temporary variables for classical optimizations such as LICM, VN
+   + 11 regular temporary variables */
+#define MAX_VN_VAR  64
+#define MAX_TEMP_VAR (11+MAX_VN_VAR)
+
+extern struct CFG *cfg;
+
+/* Name        : Var_GetStorageType
+   Description : get storage type of a variable
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+VarStorageType
+Var_GetStorageType(Var var)
+{
+    return (unsigned) var >> STORAGE_TYPE_SHIFT_SIZE;
+};
+
+/* Name        : Var_GetType
+   Description : get type of variable
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+VarType
+Var_GetType(Var var)
+{
+    return (TYPE_MASK & var) >> TYPE_SHIFT_SIZE;
+};
+
+
+/* Name        : Var_IsVariable
+   Description : check if valid variable
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Var_IsVariable(Var var)
+{
+    return (Var_GetType(var) < T_INVALID) && (Var_GetType(var) >= T_INT);
+}
+
+/*
+  function to create variables
+  */
+
+INLINE
+Var
+Var_make_local(VarType type, int number)
+{
+    number += Var_offset_of_local_var;
+    return ((((unsigned) type) << TYPE_SHIFT_SIZE)
+	    | ((unsigned) ST_LOCAL) << STORAGE_TYPE_SHIFT_SIZE
+	    | ((unsigned) number));
+}
+
+INLINE
+Var
+Var_make_stack(VarType type, int number)
+{
+    number += Var_offset_of_stack_var;
+    return ((((unsigned) type) << TYPE_SHIFT_SIZE)
+	    | ((unsigned) ST_STACK) << STORAGE_TYPE_SHIFT_SIZE
+	    | ((unsigned) number));
+}
+
+INLINE
+Var
+Var_make_temp(VarType type, int number)
+{
+    number += Var_offset_of_temp_var;
+    return ((((unsigned) type) << TYPE_SHIFT_SIZE)
+	    | ((unsigned) ST_TEMP) << STORAGE_TYPE_SHIFT_SIZE
+	    | ((unsigned) number));
+}
+
+INLINE
+Var
+Var_make_vn(VarType type, int number)
+{
+    number += Var_offset_of_temp_var + 11;
+    return ((((unsigned) type) << TYPE_SHIFT_SIZE)
+	    | ((unsigned) ST_VN) << STORAGE_TYPE_SHIFT_SIZE
+	    | ((unsigned) number));
+}

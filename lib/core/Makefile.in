@@ -1,0 +1,139 @@
+# Native portion of the core class library
+#
+# Copyright (C) 1999 MASS Lab, Seoul National University
+#
+# See the file LICENSE for usage and redistribution terms and a
+# disclaimer of all warranties.
+#
+# Written by Yoo C. Chung <chungyc@altair.snu.ac.kr>
+
+NAME		= @NAME@
+VERSION		= @VERSION@
+
+srcdir		= @srcdir@
+VPATH=		@srcdir@/java.lang:@srcdir@/java.lang.stubs:\
+		@srcdir@/java.lang.reflect:@srcdir@/java.lang.reflect.stubs:\
+		@srcdir@/java.io:@srcdir@/java.io.stubs:\
+		@srcdir@/java.util:@srcdir@/java.util.stubs
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+
+libdir		= @libdir@
+
+CC		= @CC@
+CFLAGS		= @CFLAGS@
+EXTRA_CFLAGS	= @EXTRA_CFLAGS@
+PIC		= @PIC@
+
+AS		= @AS@
+GASP		= @GASP@
+
+LD		= @LD@
+AR		= @AR@
+RANLIB		= @RANLIB@
+
+INSTALL		= @INSTALL@
+INSTALL_DATA	= @INSTALL_DATA@
+
+MKDIR		= @MKDIR@
+
+LIBNAME		= $(NAME)_core
+
+LIBEXT		= @LIBEXT@
+LIB		= lib$(LIBNAME)$(LIBEXT)
+
+INCLUDES=	-I$(srcdir) -I$(srcdir)/../../include \
+		-I$(srcdir)/../../src -I../../src
+
+OBJECTS_IO=\
+		FileDescriptorStub.o \
+		FileDescriptor.o \
+		FileInputStreamStub.o \
+		FileInputStream.o \
+		FileOutputStreamStub.o \
+		FileOutputStream.o \
+		FileStub.o \
+		File.o \
+		ObjectInputStream.o \
+		ObjectInputStreamStub.o \
+		ObjectOutputStream.o \
+		ObjectOutputStreamStub.o \
+		ObjectStreamClassStub.o \
+		ObjectStreamClass.o \
+		RandomAccessFileStub.o \
+		RandomAccessFile.o
+
+OBJECTS_LANG=\
+		ClassLoaderStub.o \
+		ClassLoader.o \
+		ClassStub.o \
+		Class.o \
+		CompilerStub.o \
+		Compiler.o \
+		DoubleStub.o \
+		Double.o \
+		FloatStub.o \
+		Float.o \
+		MathStub.o \
+		Math.o \
+		ObjectStub.o \
+		Object.o \
+		RuntimeStub.o \
+		Runtime.o \
+		SecurityManagerStub.o \
+		SecurityManager.o \
+		StringStub.o \
+		String.o \
+		SystemStub.o \
+		System.o \
+		ThreadStub.o \
+		Thread.o \
+		ThrowableStub.o \
+		Throwable.o \
+		UNIXProcessStub.o \
+		UNIXProcess.o
+
+OBJECTS_LANG_REFLECT=\
+		ArrayStub.o \
+		Array.o \
+		ConstructorStub.o \
+		Constructor.o \
+		FieldStub.o \
+		Field.o \
+		MethodStub.o \
+		Method.o
+
+OBJECTS_UTIL=\
+		ResourceBundleStub.o \
+		ResourceBundle.o
+
+OBJECTS=	$(OBJECTS_IO) $(OBJECTS_LANG) $(OBJECTS_LANG_REFLECT) \
+		$(OBJECTS_UTIL)
+
+all: $(LIB)
+
+.c.o:
+	$(CC) -c $(CFLAGS) $(PIC) $(EXTRA_CFLAGS) $(INCLUDES) -o $@ $<
+
+$(LIB): $(OBJECTS)
+	@LINKVMLIB@
+
+install: $(PROG) $(LIB)
+	test -d $(libdir) || $(MKDIR) $(libdir)
+	$(INSTALL_DATA) $(LIB) $(libdir)/$(LIB)
+
+clean:
+	rm -f $(OBJECTS) $(LIB)
+
+distclean: clean
+	rm -f Makefile
+
+depend: $(OBJECTS:.o=.c)
+	$(CC) -MM $(INCLUDES) $^ > .depend
+
+TAGS:
+
+.PHONY: all install clean distclean depend TAGS
+
+-include .depend

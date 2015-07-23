@@ -1,0 +1,672 @@
+\input texinfo  @c -*- texinfo -*-
+@c %**start of header
+@setfilename latte.info
+@settitle The LaTTe Java Virtual Machine
+@iftex
+@afourpaper
+@end iftex
+@c %**end of header
+
+
+@ifinfo
+@format
+START-INFO-DIR-ENTRY
+* LaTTe: (latte).		The LaTTe Java Virtual Machine.
+END-INFO-DIR-ENTRY
+@end format
+@end ifinfo
+
+
+@ifinfo
+This file explains how to use the LaTTe virtual machine.
+
+Copyright (C) 1999 MASS Laboratory, Seoul National University
+
+Permission is granted to make and distribute verbatim copies of this
+manual provided the copyright notice and this permission notice are
+preserved on all copies.
+
+@ignore
+Permission is granted to process this file through @TeX{} and print the
+results, provided the printed document carries copying permission notice
+identical to this one except for the removal of this paragraph (this
+paragraph not being relevant to the printed manual).
+@end ignore
+
+Permission is granted to copy and distribute modified versions of this
+manual under the conditions for verbatim copying, provided also that the
+entire resulting derived work is distributed under the terms of a
+permission notice identical to this one.
+
+Permission is granted to copy and distribute translations of this manual
+into another language, under the above conditions for modified versions.
+@end ifinfo
+
+
+@titlepage
+@title The LaTTe Java Virtual Machine
+@author Yoo C. Chung (@email{chungyc@@altair.snu.ac.kr})
+@author Byung-Sun Yang (@email{scdoner@@altair.snu.ac.kr})
+@page
+@vskip 0pt plus 1filll
+Copyright @copyright{} 1999 MASS Laboratory, Seoul National University
+
+
+Permission is granted to make and distribute verbatim copies of this
+manual provided the copyright notice and this permission notice are
+preserved on all copies.
+
+Permission is granted to copy and distribute modified versions of this
+manual under the conditions for verbatim copying, provided also that the
+entire resulting derived work is distributed under the terms of a
+permission notice identical to this one.
+
+Permission is granted to copy and distribute translations of this manual
+into another language, under the above conditions for modified versions.
+@end titlepage
+
+
+@ifinfo
+@node Top, Overview, (dir), (dir)
+@comment  node-name,  next,  previous,  up
+@top LaTTe
+
+This document describes the LaTTe virtual machine, a virtual machine
+which is able to execute Java bytecode.
+@end ifinfo
+
+@menu
+* Overview::                    What LaTTe is.
+* LaTTe in a Nutshell::         Quick start for the impatient.
+* Installation::                Configuring and installing LaTTe.
+* Invocation::                  Invoking LaTTe.
+* References::                  Pointers to relevant information.
+* Credits::                     Whom to blame.
+* Concept Index::               Index of concepts.
+
+ --- The Detailed Node Listing ---
+
+Overview
+
+* Features::                    Features that LaTTe supports.
+* Limitations::                 Standard features not found in LaTTe.
+
+Installation
+
+* Configuration Options::       Controlling how LaTTe should be built.
+
+Invocation
+
+* Environment Variables::       Environment variables.
+* General Options::             Options controlling general settings.
+* Verbosity Options::           Options controlling verbosity.
+* Execution Engine Options::    Options controlling the execution engine.
+@end menu
+
+@node Overview, LaTTe in a Nutshell, Top, Top
+@comment  node-name,  next,  previous,  up
+@chapter Overview
+@cindex overview
+
+@dfn{LaTTe} is a virtual machine which can execute Java bytecode.  It
+uses a just-in-time (JIT) compiler to translate bytecode to native code
+on the fly.  It is mainly intended to be a research vehicle for the
+implementation of various optimization techniques for fast execution of
+Java programs.
+
+As joint work with the VLIW research group at the IBM @w{T. J. Watson}
+Research Center, implementation of LaTTe was started in 1997 by the MASS
+Laboratory at Seoul National University.  LaTTe was built starting with
+code from @w{Kaffe version 0.9.2}, a freely available Java virtual machine
+that is also based on BSD-like license.
+
+The bytecode execution engine (i.e.@: the JIT compiler and the
+interpreter), the garbage collector, the exception manager, and the
+thread synchronization mechanism were replaced with new versions, in
+addition to other modifications that were made intended to improve
+performance.  Currently, the class loader, the user-level thread system,
+and the native portion of the standard class library are from Kaffe,
+with a few modifications.  Kaffe's original JIT compiler is also used to
+translate class initializers under certain circumstances.
+
+LaTTe only runs on UltraSPARCs running on top of Solaris 2.5 or higher
+versions.
+
+This document explains how to use the LaTTe virtual machine.  It's not
+intended to explain its internal workings or how to work with Java.  For
+such material, you will have to look elsewhere.  @xref{References}, for
+more information.
+
+@menu
+* Features::                    Features that LaTTe supports.
+* Limitations::                 Standard features not found in LaTTe.
+@end menu
+
+
+@node Features, Limitations, Overview, Overview
+@comment  node-name,  next,  previous,  up
+@section Features
+@cindex features
+
+@itemize @bullet{}
+@item Fast and effective JIT translation with:
+@itemize @minus{}
+@item efficient register mapping and allocation
+@item traditional optimizations (e.g., common subexpression elimination and loop invariant code motion)
+@item object oriented optimizations (e.g., customization and limited specialization)
+@end itemize
+@item A limited framework for adaptive compilation, which is currently based on method run counts.
+@item A reasonably fast bytecode interpreter, intended to be used with the adaptive compilation framework.
+@item Lightweight monitors.
+@item On-demand translation of exception handlers.
+@item A fast, non-incremental garbage collector.
+@end itemize
+
+
+@node Limitations,  , Features, Overview
+@comment  node-name,  next,  previous,  up
+@section Limitations
+@cindex limitations
+
+@itemize @bullet{}
+@item No AWT or Swing
+@item No Java 2 support (only supports 1.1).
+@item No bytecode verifier.
+@item Lacks JNI support.
+@item Incomplete class library.
+@item No support for @code{JAR} or compressed @code{ZIP} archives.
+@end itemize
+
+Refer to the files @file{TODO} and @file{BUGS} included with the source
+distribution for a complete list of known bugs.
+
+
+@node LaTTe in a Nutshell, Installation, Overview, Top
+@comment  node-name,  next,  previous,  up
+@chapter LaTTe in a Nutshell
+@cindex quick start
+@cindex short instructions
+
+This chapter enumerates the bare essentials necessary for building,
+installing, and running LaTTe.  Here we'll assume that LaTTe is to be
+installed in the directory @file{/foo} (replace this directory with the
+directory of your choice).
+
+First, make sure the system that LaTTe is being built on is an
+UltraSPARC running Solaris 2.5 or higher.
+
+Next, install the following tools if they are not already installed:
+
+@itemize @bullet{}
+@item GNU Make.
+@item GCC.
+@end itemize
+
+Then configure the build process by changing to the source directory of
+LaTTe and doing the following:
+
+@example
+./configure --prefix=/foo
+@end example
+
+Finally, build and install LaTTe by doing:
+
+@example
+make
+make install
+@end example
+
+(If GNU Make was installed with a name other than @code{make}, such as
+@code{gmake}, then use that name instead of @code{make} in the above.)
+
+And now the installation of LaTTe is complete.
+
+In order to invoke LaTTe, make sure that the environment variable
+@code{CLASSPATH} contains the class library from Sun's @w{JDK 1.1.x}.
+Download and install it somewhere if you haven't already done so.  Then
+assuming that the class library is at @file{/usr/java/lib/classes.zip},
+then with the Bourne shell do:
+
+@example
+$ CLASSPATH=/usr/java/lib/classes.zip:.; export CLASSPATH
+@end example
+
+and with the C shell do:
+
+@example
+% setenv CLASSPATH /usr/java/lib/classes.zip:.
+@end example
+
+(The @samp{$} and @samp{%} are shell prompts, so don't make the mistake
+of typing these in.)
+
+Next you'll need to set your dynamic library load path.  With the Bourne 
+shell do:
+
+@example
+$ LD_LIBRARY_PATH=/foo/lib:$LD_LIBRARY_PATH; export LD_LIBRARY_PATH
+@end example
+
+and in the C shell do:
+
+@example
+% setenv LD_LIBRARY_PATH /foo/lib:$LD_LIBRARY_PATH
+@end example
+
+(Again, the @samp{$} and @samp{%} are shell prompts.)
+
+Now we're finally ready to run LaTTe.  When executing the @code{main}
+method of @var{class}, change to the directory containing the class file
+and do:
+
+@example
+/foo/bin/latte @var{class}
+@end example
+
+For those who are interested in the performance of the various
+configurations of LaTTe, the following options are available for your
+convenience.
+
+@table @samp
+@item -Obase
+Do only register allocation while translating methods.
+
+@item -Oopt
+Do other various optimizations, not just register allocation, while
+translating methods.  This is the default.
+
+@item -Oadapt
+Only frequently executed methods are translated with full optimizations.
+@end table
+
+The rest of the manual is not really necessary to read when trying out
+LaTTe, and is only there for completeness.  Be aware that only the
+default configuration (no configuration options while building and no
+run-time options while invoking) has been extensively tested.
+
+
+@node Installation, Invocation, LaTTe in a Nutshell, Top
+@comment  node-name,  next,  previous,  up
+@chapter Installation
+@cindex configuring LaTTe
+@cindex installing LaTTe
+
+As mentioned numerous times previously, LaTTe runs only on UltraSPARCs
+running on top of Solaris version 2.5 or higher.
+
+In order to build and install LaTTe, the following tools will be required:
+
+@itemize @bullet{}
+@item
+GNU Make.  Other makes may or may not work.
+
+@item
+GNU Binutils.  This is not actually necessary if you are not building
+the interpreter.
+
+@item
+GCC.  Versions higher than 2.7.x should work.
+
+@end itemize
+
+Assuming these tools are already installed, then if you're installing
+LaTTe in @file{/usr/local}, all you have to do is the following as the
+superuser:
+
+@example
+./configure
+make
+make install
+@end example
+
+If you're an ordinary user who wants to install LaTTe in @file{/foo},
+all you need to do is:
+
+@example
+./configure --prefix=/foo
+make
+make install
+@end example
+
+@ref{Configuration Options} lists what options can be given to the
+configure script which control how LaTTe is built.
+
+LaTTe uses the class library (@file{classes.zip}) from
+@uref{http://java.sun.com/products/jdk/1.1/, Sun's Java Development
+@w{Kit 1.1.x}}, so you will also have to download it separately and
+install the class library in some appropriate location if it's not
+already installed.
+
+@menu
+* Configuration Options::       Controlling how LaTTe should be built.
+@end menu
+
+
+@node Configuration Options,  , Installation, Installation
+@comment  node-name,  next,  previous,  up
+@section Configuration Options
+@cindex compilation options
+@cindex configurations
+
+LaTTe uses @w{Autoconf 2.13} to maintain its configuration scripts.
+Most of the standard options should work.  The following lists working
+configuration options specific to LaTTe.  In order to disable an option,
+replace `enable' in the following options with `disable'.
+
+@table @samp
+@item --enable-interpreter
+Include the interpreter in the build of LaTTe.  Class initializers will
+always be interpreted in this case.  Whether other methods will be
+interpreted depends on other configuration options.  (If the translator
+is included, then only initial executions of methods will use the
+interpreter, whereas if it is not included, then of course all methods
+will be interpreted all the time.)
+
+@item --enable-translator
+Include the bytecode to native code translator in the build of LaTTe.
+If the interpreter is not built, then Kaffe's original translator is
+used for translating class initializers.  Enabled by default.
+
+@item --enable-inline-cache
+Use inline cache when making method calls.  Enabled by default.
+
+@item --enable-type-analysis
+Include type analysis in the translator, which aids certain
+optimizations.  Enabled by default.
+
+@item --enable-customization
+Do customization of methods based on argument types.  Enabled by
+default.
+
+@item --enable-debug
+Turn on debugging code in order to debug LaTTe.  (If you use this, then
+it would be convenient to also use the @code{--disable-dynamic} option.)
+
+@item --enable-gprof
+Enable profiling of LaTTe with @code{gprof}.
+
+@item --enable-call-profile
+Building LaTTe with this option makes it print a list of the type of
+call sequences used to invoke virtual methods.  This list is stored in
+@file{latte.profile}.
+
+@item --enable-bytecode-prof
+Building LaTTe with this option makes it keep track of the number of
+times each opcode is invoked.  The collected statistics are output to
+standard error after execution finishes.
+
+@item --enable-dynamic
+Use shared libraries for the native portion of the Java class library,
+and also build the virtual machine as a shared library.  Enabled by
+default.
+@end table
+
+
+@node Invocation, References, Installation, Top
+@comment  node-name,  next,  previous,  up
+@chapter Invocation
+@cindex invoking LaTTe
+
+Before invoking LaTTe, certain environment variables will have to be
+properly setup first (@pxref{Environment Variables}).
+
+To execute the static @code{Main} method of @var{class}, all you have to
+do is to invoke @code{latte} with the name of the class.  In other
+words, you do:
+
+@example
+latte @var{class}
+@end example
+
+To control the behavior of LaTTe, you can give some options to LaTTe as
+in the following:
+
+@example
+latte @var{options} @var{class}
+@end example
+
+The list of available options are shown in the following sections.
+
+@menu
+* Environment Variables::       Environment variables.
+* General Options::             Options controlling general settings.
+* Verbosity Options::           Options controlling verbosity.
+* Execution Engine Options::    Options controlling the execution engine.
+@end menu
+
+
+@node Environment Variables, General Options, Invocation, Invocation
+@comment  node-name,  next,  previous,  up
+@section Environment Variables
+@cindex environment variables
+@cindex environment
+
+Locations at which classes are searched for are specified in
+@code{CLASSPATH}, and also in @code{LATTE_CLASSPATH} for LaTTe specific
+classes.  LaTTe can only find classes in plain files or uncompressed
+@code{ZIP} files.  At the very least, the location for Sun's Java class
+library from @w{JDK 1.1.x} should be included (namely
+@file{classes.zip}).
+
+If you had built LaTTe dynamically, be sure to include the directory
+containing the LaTTe libraries in your library search path
+(@code{LD_LIBRARY_PATH}) before executing!
+
+
+@node General Options, Verbosity Options, Environment Variables, Invocation
+@comment  node-name,  next,  previous,  up
+@section General Options
+@cindex options, general
+
+This section lists those options that are for general use.
+
+@table @samp
+@item -help
+Print terse explanations for each runtime option.
+
+@item -version
+Print version number.
+
+@item -ss @var{size}
+Set the maximum native stack size to @var{size}.
+
+@item -mx @var{size}
+Set the maximum heap size to @var{size}.  This does not include the
+memory used by the translator.
+
+@item -ms @var{size}
+Set the initial heap size to @var{size}.
+
+@item -classpath @var{path}
+Set the class path to @var{path}, which is a colon-separated list of
+locations to search for classes.
+
+@item -D@var{prop}=@var{val}
+Set a property @var{prop} to the value @var{val}.
+@end table
+
+
+@node Verbosity Options, Execution Engine Options, General Options, Invocation
+@comment  node-name,  next,  previous,  up
+@section Verbosity Options
+@cindex options, verbosity
+
+The options in this section control how verbose LaTTe should be.
+
+@table @samp
+@item -verbosegc, -vgc
+Print garbage collection statistics to standard error.
+
+@item -verboseloader, -vloader
+Print message when loading classes to standard error.
+
+@item -verbosejit, -vjit
+Print message during JIT code generation to standard error.
+
+@item -verbosetime, -vtime
+Print garbage collection and translation time to standard error.
+
+@item -verbosetm, -vtm
+Print translated methods to standard error.
+
+@item -verbosecm, -vcm
+Print the methods being called to standard error.  This can produce an
+overwhelming amount of output, so don't ever use this option unless it's
+@emph{really} necessary.
+
+@item -verbosevcg, -vvcg
+Print a @code{vcg} file for each translated method, which can then be
+viewed with @code{xvcg}.
+
+@item -verboseexception, -vexception
+Print the exceptions that are generated to standard error.
+
+@item -verbosetrstats, -vtrstats
+Print translation statistics to standard error after execution ends.
+@end table
+
+
+@node Execution Engine Options,  , Verbosity Options, Invocation
+@comment  node-name,  next,  previous,  up
+@section Execution Engine Options
+@cindex options, execution engine
+
+The options listed in this section control the behavior of the execution
+engine (optimizations to use, whether to do adaptive compilation etc.).
+None of them apply when only the interpreter is built.
+
+First, options that control the high-level behavior of the translator
+are listed.  These options control a large set of specific features.
+
+@table @samp
+@item -Obase
+The JIT compiler does not perform any optimizations.  It performs
+only register allocation with copy elimination.
+
+@item -Oopt
+In addition to register allocation, the JIT compiler performs several
+optimizations such as redundancy elimination, common subexpression
+elimination, loop invariant code motion, virtual method inlining,
+customization, and so on.  This is the default.
+
+@item -Oadapt
+Do adaptive compilation based on method run counts.  For the initial
+execution of each method, the base JIT compiler is used if the
+interpreter is not included, otherwise the interpreter is used.
+@end table
+
+The following options control specific features.
+
+@table @samp
+@item -adapt
+Do method run count based adaptive compilation.  Methods are initially
+translated with no optimizations, and methods that are executed
+frequently are then retranslated with full optimizations.
+
+@item -count @var{c}
+Retranslate after method runs @var{c} times.  Only useful when method
+run count based retranslation is turned on.
+
+@item -nointrp
+Don't use the interpreter for initial execution of methods.  Only
+available when interpreter is included during the installation.
+
+@item -nocse
+Do not do common subexpression elimination while translating methods.
+
+@item -noloopopt
+Do not do loop invariant code motion while translating methods.
+
+@item -nocustom
+Do not do customization of methods based on receiving object types.
+
+@item -nospecial
+Do not do specialization of methods based on argument types.
+
+@item -noinlining
+Do not do any method inlining.
+@end table
+
+
+@node References, Credits, Invocation, Top
+@comment  node-name,  next,  previous,  up
+@chapter References
+@cindex references
+@cindex support
+@cindex mailing list
+@cindex web site
+
+For general information on Java, it would be best to visit
+@uref{http://java.sun.com/, Sun's Java home page}.  For information on
+Kaffe, on which LaTTe was based on, visit
+@uref{http://www.transvirtual.com/, Transvirtual Technologies's home
+page}.
+
+There is a web site for LaTTe at @uref{http://latte.snu.ac.kr/}.  One
+can download the sources for LaTTe and also find more information about
+the system at this site.  Publications and technical reports for LaTTe
+can also be obtained from this site.
+
+For general discussion on LaTTe, there is also a mailing list at
+@email{latte@@pallas.snu.ac.kr}.  You can visit the
+@uref{http://pallas.snu.ac.kr/mailman/listinfo/latte, list web page} in
+order to find more information about the list and to subscribe to it.
+For those for which this is a hardship, one can also subscribe to the
+list by sending @samp{subscribe} in the body to
+@email{latte-request@@pallas.snu.ac.kr}.
+
+
+@node Credits, Concept Index, References, Top
+@comment  node-name,  next,  previous,  up
+@chapter Credits
+@cindex credits
+@cindex authors
+@cindex contributors
+
+Professor Soo-Mook Moon oversaw development of LaTTe.  And the following
+persons have done major work on the LaTTe virtual machine:
+
+@itemize @bullet{}
+
+@item
+Byung-Sun Yang wrote the JIT compiler and the exception handler.
+
+@item
+Seongbae Park wrote the register allocator and the code optimizer.
+
+@item
+SeungIl Lee implemented method inlining and the exception handler.
+
+@item
+Junpyo Lee implemented the adaptive compilation framework and the OO
+optimizations.
+
+@item
+Jinpyo Park wrote the code optimizer.
+
+@item
+Suhyun Kim implemented the type analysis for the OO optimizations.
+
+@item
+Yoo C. Chung wrote the interpreter and the garbage collector.
+
+@end itemize
+
+Kemal Ebcio@u{g}lu and Erik Altman of the IBM VLIW research group
+provided the initial ideas for the register allocation and lightweight
+monitor algorithms.
+
+And of course, the class loader, the thread system, and the native
+portion of the class library were originally written by the original
+authors of Kaffe.
+
+
+@node  Concept Index,  , Credits, Top
+@comment  node-name,  next,  previous,  up
+@unnumbered Concept Index
+
+@printindex cp
+
+
+@contents
+@bye

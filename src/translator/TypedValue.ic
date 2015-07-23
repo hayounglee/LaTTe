@@ -1,0 +1,76 @@
+/* TypedValue.ic
+   
+   inline methods of TypedValue structure.
+   
+   Written by: Junpyo Lee Suhyun Kim <zelo@i.am>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+//////////////////////////////////////////////////////////////////////
+// static methods....
+//////////////////////////////////////////////////////////////////////
+
+INLINE
+TypedValue* 
+TV_new(Hjava_lang_Class* type)
+{
+    TypedValue *new_tv = (TypedValue*)FMA_calloc(sizeof(TypedValue)); 
+
+    new_tv->type = type; 
+
+    return new_tv; 
+}
+
+
+INLINE
+TypedValue*
+TV_get_new_typed_value(InstrNode* instr, int index)
+{
+    if(index == 0){
+        return instr->myTypedValue; 
+    } else {
+        assert(0 && "What a hell !"); 
+        // assert(index == 1 && Instr_IsCall(instr) && 2nd dst is LVOID); 
+        return NULL; 
+    }
+}
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+// member methods....
+//////////////////////////////////////////////////////////////////////
+
+INLINE
+Hjava_lang_Class*
+TV_GetType(TypedValue* tv)
+{
+    assert(tv); 
+    return tv->type; 
+}
+
+
+INLINE
+void
+TV_SetTypeSource(TypedValue* tv, TVTypeSource type_source)
+{
+    assert(tv);
+    tv->source = type_source; 
+}
+
+
+INLINE
+TVTypeSource
+TV_GetTypeSource(TypedValue* tv)
+{
+    assert(tv); 
+    return tv->source; 
+}
+
+
+
+

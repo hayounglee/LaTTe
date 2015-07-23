@@ -1,0 +1,46 @@
+# Makefile for handling documentation
+#
+# Copyright (C) 1999 MASS Lab, Seoul National University
+#
+# See the file LICENSE for usage and redistribution terms and a
+# disclaimer of all warranties.
+#
+# Written by Yoo C. Chung <chungyc@altair.snu.ac.kr>
+
+srcdir		= @srcdir@
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+
+mandir		= @mandir@
+infodir		= @infodir@
+
+INSTALL		= @INSTALL@
+INSTALL_DATA	= @INSTALL_DATA@
+INSTALL_INFO	= install-info
+
+MKDIR		= @MKDIR@
+
+MAKEINFO	= makeinfo
+
+all: latte.info
+
+latte.info: $(srcdir)/latte.texi
+	-$(MAKEINFO) $(srcdir)/latte.texi
+
+install:
+	test -d $(mandir) || $(MKDIR) $(mandir)/man1
+	$(INSTALL_DATA) $(srcdir)/latte.man $(mandir)/man1/latte.1
+	-test -d $(infodir) || $(MKDIR) $(infodir)
+	-$(INSTALL_DATA) latte.info $(infodir)/latte.info
+	-$(INSTALL_INFO) --info-dir=$(infodir) \
+		--section="Java Programming" $(infodir)/latte.info
+
+clean:
+	rm -f latte.info
+
+distclean: clean
+
+depend:
+
+.PHONY: all install clean distclean depend

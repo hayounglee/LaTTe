@@ -1,0 +1,124 @@
+# The runtime for executing Java class files
+#
+# Copyright (C) 1999 MASS Lab, Seoul National University
+#
+# See the file LICENSE for usage and redistribution terms and a
+# disclaimer of all warranties.
+#
+# Written by Yoo C. Chung <chungyc@altair.snu.ac.kr>
+
+NAME		= @NAME@
+VERSION		= @VERSION@
+
+srcdir		= @srcdir@
+
+VPATH=		@srcdir@:@srcdir@/runtime:@srcdir@/interpreter\
+		:@srcdir@/translator:@srcdir@/kaffejit:@srcdir@/simulator
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+
+bindir		= @bindir@
+libdir		= @libdir@
+
+CC		= @CC@
+CFLAGS		= @CFLAGS@
+EXTRA_CFLAGS	= @EXTRA_CFLAGS@
+PIC		= @PIC@
+
+AS		= @AS@
+GASP		= @GASP@
+
+LD		= @LD@
+AR		= @AR@
+RANLIB		= @RANLIB@
+
+INSTALL		= @INSTALL@
+INSTALL_PROGRAM	= @INSTALL_PROGRAM@
+INSTALL_DATA	= @INSTALL_DATA@
+
+MKDIR		= @MKDIR@
+
+PROG		= $(NAME)
+LIBNAME		= $(NAME)vm
+
+LIBEXT		= @LIBEXT@
+LIB		= lib$(LIBNAME)$(LIBEXT)
+LIBS		= @LLIBS@
+
+transform	= @program_transform_name@
+
+INCLUDES	= -I. -I$(srcdir) -I$(srcdir)/runtime -I$(srcdir)/../include
+
+RUNTIME_OBJECTS=\
+		bytecode.o \
+		code.o \
+		lookup.o \
+		external.o \
+		constants.o \
+		classMethod.o \
+		readClass.o \
+		findInJar.o \
+		baseClasses.o \
+		object.o \
+		itypes.o \
+		gc.o \
+		thread.o \
+		locks.o \
+		threadCalls.o \
+		support.o \
+		zextract.o \
+		soft.o \
+		flags.o \
+		string.o \
+		verify.o \
+		exception.o \
+		exception_handler.o \
+		stackTrace.o \
+		trampolines.o \
+		prime.o \
+		class_inclusion_test.o
+
+EXTRA_OBJECTS	= @EXTRA_OBJECTS@
+
+OBJECTS		= $(RUNTIME_OBJECTS) $(EXTRA_OBJECTS)
+
+all: $(PROG) $(LIB)
+
+@intrp_frag@
+@jit_frag@
+@kaffejit_frag@
+@sim_frag@
+
+.c.o:
+	$(CC) -c $(CFLAGS) $(PIC) $(EXTRA_CFLAGS) $(INCLUDES) $<
+
+$(PROG): $(LIB) main.o
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(INCLUDES) \
+		main.o -o $(PROG) -L. -l$(LIBNAME) $(LIBS) -l$(LIBNAME)
+
+$(LIB): $(OBJECTS)
+	@LINKVMLIB@
+
+install: $(PROG) $(LIB)
+	test -d $(bindir) || $(MKDIR) $(bindir)
+	$(INSTALL_PROGRAM) $(PROG) $(bindir)/`echo $(PROG)|sed '$(transform)'`
+	test -d $(libdir) || $(MKDIR) $(libdir)
+	$(INSTALL_DATA) $(LIB) $(libdir)/$(LIB)
+
+clean:
+	rm -f $(OBJECTS) main.o $(LIB) $(PROG)
+	rm -f print_offsets offsets.S 
+
+distclean: clean
+	rm -f Makefile config.h
+
+depend: $(filter-out interpreter.c,$(OBJECTS:.o=.c)) \
+		$(srcdir)/../util/print_offsets.c
+	$(CC) -MM $(INCLUDES) $^ > .depend
+
+TAGS:
+
+.PHONY: all install clean distclean depend TAGS
+
+-include .depend

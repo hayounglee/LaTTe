@@ -1,0 +1,127 @@
+/* TypeChecker.ic
+   inline functions of TypeChecker & TypeCheckerSet structure.
+   
+   Written by: Junpyo Lee <walker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+#define TC_ALLOC(a) gc_malloc_fixed(a)
+#define TC_FREE(a)  gc_free(a)
+
+
+/* Name        : static methods & member methods of TypeChecker
+   Description : self-explanatory
+   Maintainer  : Junpyo Lee <walker@altair.snu.ac.kr>
+   Pre-condition:
+   Post-condition:
+   Notes:  */
+INLINE TypeChecker*
+TC_new(Hjava_lang_Class* type, void* code)
+{
+    TypeChecker* tc =
+        (TypeChecker*) TC_ALLOC(sizeof(TypeChecker));
+
+    assert(type);
+    tc->checkType = type;
+    tc->body = code;
+    return tc;
+}
+
+INLINE void
+TC_free(TypeChecker* tc)
+{
+    if (tc->header)
+      TC_FREE(tc->header);
+    TC_FREE(tc);
+}
+
+INLINE Hjava_lang_Class*
+TC_GetCheckType(TypeChecker* tc) { assert(tc); return tc->checkType; }
+
+INLINE void*
+TC_GetHeader(TypeChecker* tc) { assert(tc); return tc->header; }
+
+INLINE void
+TC_SetHeader(TypeChecker* tc, void* code) { assert(tc); tc->header = code; }
+
+INLINE void*
+TC_GetBody(TypeChecker* tc) { assert(tc); return tc->body; }
+
+INLINE void
+TC_SetBody(TypeChecker* tc, void* code) { assert(tc); tc->body = code; }
+
+
+/* Name        : static methods & member methods of TypeCheckerSet
+   Description : self-explanatory
+   Maintainer  : Junpyo Lee <walker@altair.snu.ac.kr>
+   Pre-condition:
+   Post-condition:
+   Notes:  */
+INLINE TypeCheckerSet*
+TCS_new(int32 count)
+{
+    TypeCheckerSet* tcs = 
+        (TypeCheckerSet*) TC_ALLOC(sizeof(TypeCheckerSet));
+    tcs->capacity = count;
+//    smis->count = 0;
+    tcs->set = 
+        (TypeChecker**) TC_ALLOC(sizeof(TypeChecker*) * count);
+    return tcs;
+}
+
+INLINE TypeChecker*
+TCS_GetIdxElement(TypeCheckerSet* tcs, int32 idx)
+{
+    assert(tcs);
+    assert(idx < tcs->count);
+
+    return tcs->set[idx];
+}
+
+INLINE void 
+TCS_AddTC(TypeCheckerSet* tcs, TypeChecker* tc)
+{
+    assert(tcs);
+    assert(tc);
+    if (tcs->capacity == tcs->count) {
+        int32 i;
+        TypeChecker** old = tcs->set;
+        tcs->capacity *= 2;
+        tcs->set = 
+            (TypeChecker**) TC_ALLOC(sizeof(TypeChecker*) * tcs->capacity);
+        for (i = 0; i < tcs->count; i++) {
+            tcs->set[i] = old[i];
+        }
+        TC_FREE(old);
+    }
+
+    tcs->set[tcs->count++] = tc;
+}
+
+INLINE TypeChecker*
+TCS_GetTypeChecker(TypeCheckerSet* tcs, Hjava_lang_Class* type, void* code)
+{
+    int32 i;
+    assert(tcs);
+
+    for (i = 0; i < tcs->count; i++) {
+        TypeChecker* tc = TCS_GetIdxElement(tcs, i);
+#ifdef CUSTOMIZATION
+        if (TC_GetCheckType(tc) == type 
+            && TC_GetBody(tc) == code)
+          return tc;
+#else
+        if (TC_GetCheckType(tc) == type) {
+            TC_SetBody(tc, code);
+            return tc;
+        }
+#endif
+    }
+    return NULL;
+}
+
+INLINE int32 
+TCS_GetSize(TypeCheckerSet* tcs) { assert(tcs); return tcs->count; }

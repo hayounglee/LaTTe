@@ -1,0 +1,339 @@
+/* -*- mode: C -*-
+   translate.ic
+   
+   TranslationInfo data structure accessors
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+INLINE
+void
+TI_SetRootMethod(TranslationInfo *info, Method *method) 
+{
+    assert(info != NULL);
+    assert(method != NULL);
+
+    info->rootMethod = method;
+}
+
+INLINE
+Method *
+TI_GetRootMethod(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->rootMethod;
+}
+
+INLINE
+void
+TI_SetStartBytecodePC(TranslationInfo *info, int bpc) 
+{
+    assert(info != NULL);
+
+    info->startBytecodePC = bpc;
+}
+
+INLINE
+int
+TI_GetStartBytecodePC(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->startBytecodePC;
+}
+
+INLINE
+void
+TI_SetGenMap(TranslationInfo *info, int *map) 
+{
+    assert(info != NULL);
+
+    info->genMap = map;
+}
+
+INLINE
+int *
+TI_GetGenMap(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->genMap;
+}
+
+INLINE
+void
+TI_SetRetMap(TranslationInfo *info, int *map) 
+{
+    assert(info != NULL);
+
+    info->retMap = map;
+}
+
+INLINE
+int *
+TI_GetRetMap(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->retMap;
+}
+
+INLINE
+void
+TI_SetCallerLocalNO(TranslationInfo *info, int no) 
+{
+    assert(info != NULL);
+
+    info->callerLocalNO = no;
+}
+
+INLINE
+int
+TI_GetCallerLocalNO(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->callerLocalNO;
+}
+
+INLINE
+void
+TI_SetCallerStackNO(TranslationInfo *info, int no) 
+{
+    assert(info != NULL);
+
+    info->callerStackNO = no;
+}
+
+INLINE
+int
+TI_GetCallerStackNO(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->callerStackNO;
+}
+
+INLINE
+void
+TI_SetCheckType(TranslationInfo *info, struct Hjava_lang_Class *type)
+{
+    assert(info != NULL);
+
+    info->checkType = type;
+}
+
+INLINE
+struct Hjava_lang_Class *
+TI_GetCheckType(TranslationInfo *info)
+{
+    assert(info != NULL);
+
+    return info->checkType;
+}
+
+INLINE
+void
+TI_SetReturnAddr(TranslationInfo *info, void *addr) 
+{
+    assert(info != NULL);
+
+    info->returnAddr = addr;
+}
+
+INLINE
+void *
+TI_GetReturnAddr(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->returnAddr;
+}
+
+INLINE
+void
+TI_SetReturnStackTop(TranslationInfo *info, int stack_top) 
+{
+    assert(info != NULL);
+
+    info->returnStackTop = stack_top;
+}
+
+INLINE
+int
+TI_GetReturnStackTop(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->returnStackTop;
+}
+
+INLINE
+void
+TI_SetNativeCode(TranslationInfo *info, nativecode *code) 
+{
+    assert(info != NULL);
+
+    info->nativeCode = code;
+}
+
+INLINE
+nativecode *
+TI_GetNativeCode(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->nativeCode;
+}
+
+INLINE
+void
+TI_SetInitMap(TranslationInfo *info, int *map) 
+{
+    assert(info != NULL);
+
+    info->initMap = map;
+}
+
+INLINE
+int *
+TI_GetInitMap(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->initMap;
+}
+
+INLINE
+void
+TI_SetLocalVarNO(TranslationInfo *info, int number) 
+{
+    assert(info != NULL);
+
+    info->localVarNO = number;
+}
+
+INLINE
+int
+TI_GetLocalVarNO(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->localVarNO;
+}
+
+INLINE
+void
+TI_SetStackVarNO(TranslationInfo *info, int number) 
+{
+    assert(info != NULL);
+
+    info->stackVarNO = number;
+}
+
+INLINE
+int
+TI_GetStackVarNO(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->stackVarNO;
+}
+
+INLINE
+bool
+TI_IsFromOriginal(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return (info->info == TR_FROM_ORIGINAL);
+}
+
+INLINE
+void
+TI_SetFromOriginal(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    info->info = TR_FROM_ORIGINAL;
+}
+
+INLINE
+bool
+TI_IsFromObject(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return (info->info == TR_FROM_OBJECT);
+}
+
+INLINE
+void
+TI_SetFromObject(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    info->info = TR_FROM_OBJECT;
+}
+
+INLINE
+bool
+TI_IsFromException(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return (info->info == TR_FROM_EXCEPTION);
+}
+
+INLINE
+void
+TI_SetFromException(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    info->info = TR_FROM_EXCEPTION;
+}
+
+INLINE
+struct MethodInstance *
+TI_GetRootMethodInstance(TranslationInfo *info)
+{
+    assert(info != NULL);
+
+    return info->rootInstance;
+}
+
+INLINE
+void
+TI_SetRootMethodInstance(TranslationInfo *info,
+			 struct MethodInstance *mi)
+{
+    assert(info != NULL);
+
+    info->rootInstance = mi;
+}
+
+#ifdef CUSTOMIZATION
+INLINE
+void
+TI_SetSM(TranslationInfo *info, struct SpecializedMethod_t *sm) 
+{
+    assert(info != NULL);
+
+    info->sm = sm;
+}
+
+INLINE
+struct SpecializedMethod_t*
+TI_GetSM(TranslationInfo *info) 
+{
+    assert(info != NULL);
+
+    return info->sm;
+}
+#endif /* CUSTOMIZATION */

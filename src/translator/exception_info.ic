@@ -1,0 +1,43 @@
+/* -*- mode: C -*-
+   exception_info.ic
+   
+   field accessors of structure ExceptionInfoTable
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+INLINE
+int
+EIT_GetNativePC(ExceptionInfo *this)
+{
+    assert(this);
+    return this->nativePC;
+}
+
+INLINE
+int
+EIT_GetBytecodePC(ExceptionInfo *this)
+{
+    assert(this);
+    return this->bytecodePC;
+}
+
+INLINE
+struct MethodInstance *
+EIT_GetMethodInstance(ExceptionInfo *this)
+{
+    assert(this);
+    return this->methodInstance;
+}
+
+INLINE
+int *
+EIT_GetVariableMap(ExceptionInfo *this)
+{
+    assert(this);
+    return this->varMap;
+}

@@ -1,0 +1,103 @@
+/* -*- Mode: C -*-
+   find_method.ic
+
+   Some inline functions related find_method.c
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+#include "gc.h"
+
+extern CellNode *cell_table[];
+
+INLINE
+void
+CN_initialize(void)
+{
+    memset(cell_table, 0, sizeof(CellNode *) * CELL_TABLE_SIZE);
+}
+
+INLINE
+void
+CN_register_data(uintp start_addr, uintp end_addr, void *data, Origin org)
+{
+    int a_cell; /* iterator */
+    int next_start_addr;
+    CellNode *cell;
+
+    a_cell = (start_addr >> CELL_ALIGN) & 0x00001fff;
+    next_start_addr = (start_addr + CELL_SIZE) & -CELL_SIZE;
+
+    while (next_start_addr < end_addr) {
+	cell = gc_malloc_fixed(sizeof(CellNode));
+	
+	cell->startAddr = start_addr;
+	cell->endAddr = next_start_addr;
+	cell->data = data;
+        cell->org = org;
+	cell->next = NULL;
+
+	cell->next = cell_table[a_cell];
+	cell_table[a_cell] = cell;
+
+        start_addr = next_start_addr;
+        next_start_addr = (start_addr + CELL_SIZE) & -CELL_SIZE;
+        a_cell = (a_cell + 1) % CELL_TABLE_SIZE;
+    }
+   
+    cell = gc_malloc_fixed(sizeof(CellNode));
+	
+    cell->startAddr = start_addr;
+    cell->endAddr = end_addr;
+    cell->data = data;
+    cell->org = org;
+    cell->next = NULL;
+
+    cell->next = cell_table[a_cell];
+    cell_table[a_cell] = cell;
+}
+
+INLINE
+CellNode*
+_find_data(uintp pc)
+{
+    CellNode *header;
+    int hash_no;
+    
+    hash_no = (pc >> CELL_ALIGN) & 0x00001fff;
+
+    for(header = cell_table[hash_no]; header != NULL; header = header->next) {
+        if (pc >= header->startAddr && pc < header->endAddr) {
+            return header;
+        }
+    }
+
+    return NULL;
+}
+
+INLINE
+void *
+CN_find_data(uintp pc)
+{
+    CellNode *node = _find_data(pc);
+    if (node == NULL) 
+      return NULL;
+    else
+      return node->data;
+}
+
+INLINE
+bool
+CN_is_from_type_check_code(uintp pc)
+{
+    CellNode *node = _find_data(pc);
+    if (node == NULL) 
+      return false;
+    else if (node->org == TypeCheckCode)
+      return true;
+
+    return false;
+}

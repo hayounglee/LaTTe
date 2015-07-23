@@ -1,0 +1,99 @@
+/* bit_vector.ic
+   
+   inline function to manipulate bit vectors
+   
+   Written by: Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+
+INLINE
+void
+BV_SetBit( word* bit_vector, int index )
+{
+   int    word_seg = index / 32;
+   int    index_in_word = index % 32;
+
+   bit_vector[word_seg] |= Mask_For_Word[index_in_word];
+}
+
+INLINE
+bool 
+BV_IsSet( word* bit_vector, int index )
+{
+   int    word_seg = index / 32;
+   int    index_in_word = index % 32;
+
+   return !!(bit_vector[word_seg] & Mask_For_Word[index_in_word]);
+   // hack to return 1 if true.
+}
+
+INLINE
+void
+BV_ClearBit( word* bit_vector, int index )
+{
+   int    word_seg = index / 32;
+   int    index_in_word = index % 32;
+
+   bit_vector[word_seg] &= ~Mask_For_Word[index_in_word];
+}
+
+INLINE
+void
+BV_Copy( word* dest, word* src, int size )
+{
+   int    i;
+   for (i = 0; i < size; i++) {
+      dest[i] = src[i];
+   }
+}
+
+INLINE
+void
+BV_OR( word* dest, word* src, int size )
+{
+   int    i;
+   for (i = 0; i < size; i++) {
+      dest[i] |= src[i];
+   }
+}
+
+INLINE
+void
+BV_AND( word* dest, word* src, int size )
+{
+   int    i;
+   for (i = 0; i < size; i++) {
+      dest[i] &= src[i];
+   }
+}
+
+INLINE
+void
+BV_Init( word* bit_vector, int size )
+{
+   int     i;
+   for (i = 0; i < size; i++) {
+      bit_vector[i] = 0;
+   }
+}
+
+INLINE
+void BV_ClearAll( word * bit_vector, int size )
+{
+   BV_Init( bit_vector, size );
+}
+
+INLINE
+void 
+BV_SetAll( word *bv, int size )
+{
+   int     i;
+   for (i = 0; i < size; i++) {
+      bv[i] = 0xFFFFFFFFU;
+   }
+}

@@ -1,0 +1,150 @@
+/* loop_opt_detect.ic
+
+   Loop detection
+
+   Written by: Jinpyo Park <jp@altair.snu.ac.kr>
+
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+/* Maximum possible number of exits. */
+inline static int
+max_loop_exit(void) 
+{
+    return ((loop_instr_array_size >> 2) + 1);
+}
+
+inline static bool
+is_eligible_instr_for_loop_opt(InstrNode* instr)
+{
+    if (Instr_IsCall(instr)) return false;
+    return true;
+}
+
+/* Recursive subroutine of loop_detection */
+static bool
+_detect_loop(InstrNode* instr, int num_of_instr)
+{
+    if (Instr_IsRegionEnd(instr)) { 
+        if (instr == loop_entry_instr) {    
+            /* A candidate loop has been found */
+            /* Build an instruction array */    
+            loop_instr_array_size = num_of_instr;
+            loop_instr_array = 
+                (LoopInstr*)FMA_calloc(sizeof(LoopInstr)* loop_instr_array_size);
+            loop_instr_array_index = 0;
+            /* Prepare an array for the exit instructions */
+            loop_exit_instr_idx_array = (int*)FMA_calloc(sizeof(int) * max_loop_exit());
+            loop_exit_instr_idx_array_size = 0;
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        switch (Instr_GetNumOfSuccs(instr)) {
+        case 1:   {  /* single successor */
+            if (is_eligible_instr_for_loop_opt(instr) &&
+                _detect_loop(Instr_GetSucc(instr, 0), num_of_instr+1))
+            {
+                /* insert the instruction in the array */
+                intern_loop_instr_in_array(loop_instr_array_index++, instr, 0, basic_block_num);
+                return true;
+            } else {
+                return false;
+            }
+        }
+        case 2: { /* conditional branches */
+            /* Our simple definition of loops is a region with a backedge.
+               Following the definition, if one edge is on the loop path,
+               the other edge should not be on the loop path. So, we can
+               decide every branch to be exit branch. */    
+            int path_id;
+            for (path_id=0; path_id<2; path_id++) {
+                if (_detect_loop(Instr_GetSucc(instr, path_id), num_of_instr+1)) {
+                    basic_block_num++;
+                    intern_loop_instr_in_array(loop_instr_array_index, instr, path_id,
+                                               basic_block_num);
+                    loop_exit_instr_idx_array[loop_exit_instr_idx_array_size++] =
+                        loop_instr_array_index;
+                    assert(loop_exit_instr_idx_array_size <= max_loop_exit());
+                    loop_instr_array_index++;
+                    /* The other edge is not in the loop, so it is not necessary
+                       to process the other path of this branch. */
+                    return true;
+                }
+            }   
+            return false;
+        }
+        default: /* succ>2 or succ==0 */
+            return false;
+        }
+    }
+}
+
+/* Return true if instr is the candidate loop header. 
+   In addition, build basic information for the loop */
+static bool
+detect_loop(CFG* cfg, InstrNode* instr)
+{
+    int     i;
+    /* First of all, check if this region satifies the following conditions:
+       (1) Region header should have two predecessors. 
+           one is the loop entry and the other is the back edge. 
+       (2) Region header should not be a branch. 
+       (3) Region header should be acceptable for loop optimization. 
+           i.e. it should not be a method call. */
+    if (Instr_GetNumOfPreds(instr) != 2 ||
+        Instr_GetNumOfSuccs(instr) != 1 ||
+        !is_eligible_instr_for_loop_opt(instr) ) return false;
+   
+    loop_instr_array_size = 0;
+    basic_block_num = 0;
+    /* Store loop header for comparison in _detect_loop. */
+    loop_entry_instr = instr;
+    
+    if (_detect_loop(Instr_GetSucc(instr, 0), 1)) {
+        if (loop_instr_array_size > MAX_LOOP_INSTRS) {
+            DBG(fprintf(stderr,"This loop is too big for loop optimization (with %d instrs > %d).\n",
+                        loop_instr_array_size, MAX_LOOP_INSTRS));
+            return false;
+        }
+        intern_loop_instr_in_array(loop_instr_array_index, instr, 0,
+                                   basic_block_num);
+        loop_instr_array_index++;
+        assert(loop_instr_array_index == loop_instr_array_size);
+        /* Increment basic_block_num so that it represents the number of BBs. */
+        basic_block_num++;
+        /* set the outer predecessor of entry instruction */
+        assert(Instr_GetPred(instr, 0) == loop_instr_array[0].instr ||
+               Instr_GetPred(instr, 1) == loop_instr_array[0].instr);
+        /* Set the ordinal for loop outer predecessor */
+        loop_entry_outer_pred_num = 
+            (Instr_GetPred(instr, 0) == loop_instr_array[0].instr) ? 1 : 0;
+        /* Loop outer predecessor */
+        loop_entry_outer_pred_instr = 
+            Instr_GetPred(instr, loop_entry_outer_pred_num);
+        /* Set the path id from the outer predecessor to the loop entry */    
+        if (Instr_GetSucc(loop_entry_outer_pred_instr, 0) == instr) {
+            loop_entry_outer_pred_instr_succ_num = 0;
+        } else if (Instr_GetSucc(loop_entry_outer_pred_instr, 1) == instr) {
+            loop_entry_outer_pred_instr_succ_num = 1;
+        } else {
+            assert(Instr_GetNumOfSuccs(loop_entry_outer_pred_instr) > 2);
+            for (i=2; i<Instr_GetNumOfSuccs(loop_entry_outer_pred_instr); i++) {
+                if (Instr_GetSucc(loop_entry_outer_pred_instr, i) == instr) {
+                    loop_entry_outer_pred_instr_succ_num = i;
+                    break;
+                }
+            }
+            assert(i != Instr_GetNumOfSuccs(loop_entry_outer_pred_instr));
+        }
+        DBG( printf("# of basic blocks in loop = %d\n", basic_block_num); );
+        return true;
+    } else {
+        return false;
+    }
+}
+

@@ -1,0 +1,118 @@
+/* ArgSet.ic
+   inline methods of ArgSet structure.
+   
+   Written by: Junpyo Lee <walker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+
+#define AS_ALLOC(a) gc_malloc_fixed(a)
+#define AS_FREE(a)  gc_free(a)
+
+/* ================================================================
+   Static Methods 
+   ================================================================ */
+
+/* allocate new ArgSet instance */
+INLINE ArgSet*
+AS_new(int32 size)
+{
+    ArgSet* argset =
+        (ArgSet*) AS_ALLOC(sizeof(ArgSet));
+
+//    argset->count = 0;
+    argset->size = size;
+    argset->argType = 
+        (Hjava_lang_Class**) AS_ALLOC(sizeof(Hjava_lang_Class*)*size);
+
+    return argset;
+}
+
+/* free ArgSet instance */
+INLINE void
+AS_free(ArgSet* as)
+{
+    assert(as);
+    if (as->argType != NULL)
+      AS_FREE(as->argType);
+
+    AS_FREE(as);
+}
+
+/* ================================================================
+   Member Methods
+   ================================================================ */
+
+/* get the size of arguments */
+INLINE int32
+AS_GetSize(ArgSet* as)
+{ 
+    assert(as); 
+    return as->size; 
+}
+
+/* get the size of arguments whose types are known */
+INLINE int32
+AS_GetCount(ArgSet* as)
+{ 
+    assert(as); 
+    return as->count; 
+}
+
+/* get the idx-th argument type */
+INLINE Hjava_lang_Class*
+AS_GetArgType(ArgSet* as, int32 idx)
+{ 
+    assert(as); 
+    assert(as->size>idx);
+    return as->argType[idx]; 
+}
+
+/* set the idx-th argument type */
+INLINE void
+AS_SetArgType(ArgSet* as, int32 idx, Hjava_lang_Class* type)
+{
+    assert(as);
+    assert(as->size>idx);
+    assert(as->argType[idx]==NULL);
+
+    as->count++;
+    as->argType[idx] = type;
+}
+
+/* check if two ArgSets are identical */
+INLINE bool
+AS_IsEqualArgSet(ArgSet* as1, ArgSet* as2)
+{
+    int i;
+    assert(as1);
+    assert(as2);
+
+    if (as1->size != as2->size) return false;
+
+    for (i = 0; i < as1->size; i++)
+      if (as1->argType[i] != as2->argType[i])
+        return false;
+    return true;
+}
+
+/* Name        : AS_make_from_type
+   Description : make ArgSet from receiver type
+   Maintainer  : Junpyo Lee <walker@altair.snu.ac.kr>
+   Pre-condition:
+   Post-condition:
+   Notes:  */
+INLINE
+ArgSet*
+AS_make_from_type(Hjava_lang_Class* type) 
+{
+    ArgSet* argset = NULL;
+
+    argset = AS_new(1);
+    AS_SetArgType(argset, 0, type);
+
+    return argset;
+}

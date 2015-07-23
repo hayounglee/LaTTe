@@ -1,0 +1,15 @@
+//
+// File Name : basic.ic
+// Author    : Suhyun Kim
+//
+// Description:
+// Notice:
+//  * You'd better include this file at the last moment for INLINE. 
+//
+
+#ifndef MAX
+INLINE
+int
+MAX( int a, int b )
+{ return (b > a)? b : a; }
+#endif /* MAX */

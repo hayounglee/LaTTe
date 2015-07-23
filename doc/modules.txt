@@ -1,0 +1,35 @@
+Global declarations made in the portions of the code not included in
+the original Kaffe source are grouped by sections.  Each section has
+an associated prefix, which is prepended along with an underbar to
+each global declaration included in the section.
+
+This file lists these prefixes along with a terse explanation of the
+corresponding section in alphabetical order.
+
+AllocStat	: register allocation status
+AS      : representation of type of arguments
+BA	: traverses bytecode and collect some information
+BCode	: bytecode manipulation related
+CFGGen	: translating bytecode into pseudo instructions
+CodeGen	: native code generation
+CMA     : memory allocator for JIT-compiled code
+CN	: range based data structure used for finding a method with an address
+CSeq	: generate some code sequences during cfg generation
+EH	: exception handling related functions
+EIT	: exception info table which is hash table of
+	  (native pc, bytecode pc, variable maps)
+FMA     : fast memory allocation
+gc	: memory management system
+IG	: method inlining related functions
+Instr	: instruction node used for JIT compilation
+intrp	: interpreter
+JE	: jexception structure's getters and setters
+JEE	: jexceptionEntry structure's getters and setters
+MI	: method instance related functions
+Pbc     : Profile bytecode
+Reg	: physical register related functions
+RegAlloc	: register allocation functions
+RT	: runtime functions that used by translated code
+SMA     : session-based memory allocation
+TA      : type analysis
+Var	: pseudo register called variable related functions

@@ -1,0 +1,27 @@
+Future plans
+============
+
+Reduce translation overhead.
+
+Improve the adaptive compilation framework.  (Method metamorphosis,
+more effective profiling, better use of profiles in the translator,
+etc.)
+
+Use 64 bit integer instructions on platforms that can use them.
+
+More redundancy elimination in the translator (array bound checking
+elimination, elimination of CHECKCAST following INSTANCEOF, etc.)
+
+
+Features that should eventually implemented
+===========================================
+
+No bytecode verifier
+
+No JNI.
+
+No AWT.
+
+No serialization.
+
+No support for JAR or compressed ZIP archives.

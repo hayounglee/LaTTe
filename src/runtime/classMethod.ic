@@ -1,0 +1,713 @@
+/* -*- mode: C -*-
+   ClassMethod.ic
+   
+   Implementation file for inline functions to manipulate Class, Method
+   and Field data structure
+   
+   Written by: Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+#include <assert.h>
+
+extern Method *getMethodSignatureClass(constIndex, Method *);
+
+/* 
+   Name        : Class_GetName
+   Description : get the name of a class in Utf8 format
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: 
+ */
+INLINE
+Utf8Const *
+Class_GetName(Hjava_lang_Class *class)
+{
+    return class->name;
+}
+
+INLINE
+Hjava_lang_Class *
+Class_GetSuperclass(Hjava_lang_Class *class)
+{
+    return class->superclass;
+}
+
+INLINE
+int
+Class_GetNumOfImplementedInterfaces(Hjava_lang_Class *class)
+{
+    return class->interface_len;
+}
+
+INLINE
+Hjava_lang_Class **
+Class_GetImplementedInterfaces(Hjava_lang_Class *class)
+{
+    return class->interfaces;
+}
+
+INLINE
+int
+Class_GetNumOfDefinedMethods(Hjava_lang_Class *class)
+{
+    return class->nmethods;
+}
+
+INLINE
+Method *
+Class_GetDefinedMethods(Hjava_lang_Class *class)
+{
+    return class->methods;
+}
+
+INLINE
+int8
+Class_GetState(Hjava_lang_Class *class)
+{
+    return class->state;
+}
+
+
+/* 
+   Name        : Class_GetNumOfFields
+   Description : get the number of fields defined in the class
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: The number counts static fields in the class
+ */
+INLINE
+int
+Class_GetNumOfFields(Hjava_lang_Class *class)
+{
+    return class->nfields;
+}
+
+INLINE
+Field *
+Class_GetFields(Hjava_lang_Class *class)
+{
+    return class->fields;
+}
+
+INLINE
+int
+Class_GetNunOfStaticFields(Hjava_lang_Class *class)
+{
+    return class->nsfields;
+}
+
+
+INLINE
+int
+Class_GetNumOfMethodInDispatchTable(Hjava_lang_Class *class)
+{
+    return class->msize;
+}
+
+INLINE
+int
+Class_GetNumOfMethodInInterfaceTable(Hjava_lang_Class *class)
+{
+    return class->ITsize;
+}
+
+/* 
+   Name        : Class_GetVirtualTable
+   Description : get the pointer to the virtual table of a class
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:
+   Currently, a virtual table consists of a dispatch table for
+   INVOKEVIRTUAL and an interface table for INVOKEINTERFACE.
+   Entries in the interface table have minus offsets.
+ */
+INLINE
+dispatchTable *
+Class_GetVirtualTable(Hjava_lang_Class *class)
+{
+    return class->dtable;
+}
+
+INLINE
+constants *
+Class_GetConstantPool(Hjava_lang_Class *class)
+{
+    return &class->constants;
+}
+
+/* Name        : Class_GetPrimarySignature
+   Description : return signature of primary class
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: signature of primary class exist in class->msize field  */
+INLINE
+int
+Class_GetPrimarySignature(Hjava_lang_Class *class)
+{
+    return class->msize;
+}
+
+INLINE
+Hjava_lang_Class *
+Class_get_class_object(char *class_name)
+{
+    return lookupClass(class_name);
+}
+
+/* 
+   Name        : Class_get_primary_class
+   Description : get the class object of a primary type such as int, float, ...
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition: 'prim_type' is an integer value used in the constant pool.
+
+   Post-condition:
+   
+   Notes: 
+ */
+extern Hjava_lang_Class* types[];
+
+INLINE
+Hjava_lang_Class *
+Class_get_primary_class(int prim_type)
+{
+    return types[prim_type];
+}
+
+INLINE
+byte
+Class_GetCPEntryType(Hjava_lang_Class *class, int cp_index)
+{
+    return class->constants.tags[cp_index];
+}
+
+INLINE
+word
+Class_GetCPEntryData(Hjava_lang_Class *class, int cp_index)
+{
+    return class->constants.data[cp_index];
+}
+
+// For array classes, we reuse several fields to express array-specific
+// values.
+//
+// fields - element type
+// methods - component type
+// nfields - dimension
+// bfsize - encoding
+//
+INLINE
+bool
+Class_IsInterfaceType(Hjava_lang_Class* class)
+{
+    return (class->accflags & ACC_INTERFACE);
+}
+
+INLINE
+bool
+Class_IsPrimitiveType(Hjava_lang_Class* class)
+{
+    return (class->dtable == _PRIMITIVE_DTABLE);
+}
+
+INLINE
+bool
+Class_IsArrayType(Hjava_lang_Class* class)
+{
+    return (CLASS_CNAME(class)[0] == '[');
+}
+
+INLINE
+TypeRep*
+Class_GetTypeRep(Hjava_lang_Class* class)
+{
+    return &class->type_rep;
+}
+
+INLINE
+Hjava_lang_Class*
+Class_GetArrayType(Hjava_lang_Class* class)
+{
+    return class->array_cache;
+}
+INLINE
+void
+Class_SetArrayType(Hjava_lang_Class* class, Hjava_lang_Class* array)
+{
+    assert(Class_IsArrayType(array));
+    class->array_cache = array;
+}
+
+INLINE
+Hjava_lang_Class*
+Class_GetElementType(Hjava_lang_Class* class)
+{
+    assert(Class_IsArrayType(class));
+    return (Hjava_lang_Class*)class->fields;
+}
+
+INLINE
+void
+Class_SetElementType(Hjava_lang_Class* class, Hjava_lang_Class* elem)
+{
+    assert(Class_IsArrayType(class));
+    class->fields = (Field*)elem;
+}
+
+INLINE
+Hjava_lang_Class*
+Class_GetComponentType(Hjava_lang_Class* class)
+{
+    assert(Class_IsArrayType(class));
+    return (Hjava_lang_Class*)class->methods;
+}
+
+INLINE
+void
+Class_SetComponentType(Hjava_lang_Class* class, Hjava_lang_Class* comp)
+{
+    assert(Class_IsArrayType(class));
+    class->methods = (Method*)comp;
+}
+
+INLINE
+short
+Class_GetDimension(Hjava_lang_Class* class)
+{
+    assert(Class_IsArrayType(class));
+    return class->nfields;
+}
+
+INLINE
+void
+Class_SetDimension(Hjava_lang_Class* class, short dim)
+{
+    assert(Class_IsArrayType(class));
+    class->nfields = dim;
+}
+
+INLINE
+int
+Class_GetEncoding(Hjava_lang_Class* class)
+{
+    assert(Class_IsArrayType(class));
+    return class->bfsize;
+}
+
+INLINE
+void
+Class_SetEncoding(Hjava_lang_Class* class, int encoding)
+{
+    assert(Class_IsArrayType(class));
+    class->bfsize = encoding;
+}
+
+INLINE
+Utf8Const *
+Method_GetName(Method *method)
+{
+    return method->name;
+}
+
+INLINE
+Utf8Const *
+Method_GetSignature(Method *method)
+{
+    return method->signature;
+}
+
+INLINE
+Hjava_lang_Class*
+Method_GetDefiningClass( Method* method )
+{
+    return method->class;
+}
+
+INLINE
+accessFlags
+Method_GetAccessFlags(Method *method)
+{
+    return method->accflags;
+}
+
+
+INLINE
+int
+Method_GetDTableIndex(Method *method)
+{
+    return method->idx;
+}
+
+INLINE
+int
+Method_GetITableIndex(Method *method)
+{
+    return method->iidx;
+}
+
+INLINE
+int
+Method_GetStackSize(Method *method)
+{
+    return method->stacksz;
+}
+
+INLINE
+int
+Method_GetLocalSize(Method *method)
+{
+    return method->localsz;
+}
+
+INLINE
+nativecode *
+Method_GetNativeCode(Method *method)
+{
+    return method->ncode;
+}
+
+INLINE
+void
+Method_SetNativeCode(Method *method, nativecode *ncode)
+{
+    method->ncode = ncode;
+}
+
+INLINE
+uint8 *
+Method_GetByteCode(Method *method)
+{
+    return method->bcode;
+}
+
+INLINE
+uint8 *
+Method_GetReferredByteCode(Method *method, int offset)
+{
+    return &method->bcode[offset];
+}
+
+
+INLINE
+int
+Method_GetByteCodeLen(Method *method)
+{
+    return method->bcodelen;
+}
+
+/* 
+   Name        : Method_GetArgSize
+   Description : get the argument size from the signature
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: For virtual methods, the actual argument size is more than
+          the return value of this function by 1.
+ */
+
+INLINE
+int
+Method_GetArgSize(Method *method)
+{
+    return method->in;
+}
+
+INLINE
+int
+Method_GetRetSize(Method *method)
+{
+    return method->out;
+}
+
+INLINE
+struct _jexception *
+Method_GetExceptionTable(Method *method)
+{
+    return method->exception_table;
+}
+
+/* 
+   Name        : Method_GetReferredClass
+   Description : get the class object referred by a method
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: 'cp_index' is an index in the constant pool of the class
+          'method' belongs to.
+ */
+INLINE
+Hjava_lang_Class *
+Method_GetReferredClass(Method *method, int cp_index)
+{
+    return getClass(cp_index, Method_GetDefiningClass(method));
+}
+
+INLINE
+Method *
+Method_GetReferredMethod(Method *method, int cp_index)
+{
+    return getMethodSignatureClass((constIndex) cp_index, method);
+}
+
+
+INLINE
+bool
+Method_IsNative(Method *method)
+{
+    return ((method->accflags & ACC_NATIVE) != 0);
+}
+
+INLINE
+bool
+Method_IsTranslated(Method *method)
+{
+    return ((method->accflags & ACC_TRANSLATED) != 0);
+}
+
+INLINE
+bool
+Method_IsStatic(Method *method)
+{
+    return ((method->accflags & ACC_STATIC) != 0);
+}
+
+INLINE
+bool
+Method_IsSynchronized(Method *method)
+{
+    return ((method->accflags & ACC_SYNCHRONISED) != 0);
+}
+
+
+INLINE
+Utf8Const *
+Field_GetName(Field *field)
+{
+    return field->name;
+}
+
+INLINE
+Hjava_lang_Class *
+Field_GetType(Field *field)
+{
+    return field->type;
+}
+
+INLINE
+accessFlags
+Field_GetAccessFlags(Field *field)
+{
+    return field->accflags;
+}
+
+/* 
+   Name        : Field_GetSize
+   Description : get the size of a field in bytes
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: 
+ */
+INLINE
+int
+Field_GetSize(Field *field)
+{
+    return field->bsize;
+}
+
+INLINE
+int
+Field_GetOffset(Field *field)
+{
+    return field->info.boffset;
+}
+
+INLINE
+void *
+Field_GetStaticAddr(Field *field)
+{
+    return field->info.addr;
+}
+
+INLINE
+bool
+Field_IsReference(Field *field)
+{
+    return FIELD_ISREF(field);
+}
+
+INLINE
+bool
+Field_IsPrimary(Field *field)
+{
+    return !FIELD_ISREF(field);
+}
+
+INLINE
+void
+Method_SetBcodeInfo(Method *method, uint8 *info)
+{
+    assert(method);
+    method->bcodeInfos = info;
+}
+
+INLINE
+uint8 *
+Method_GetBcodeInfo(Method *method)
+{
+    assert(method);
+
+    return method->bcodeInfos;
+}
+
+#ifdef VARIABLE_RET_COUNT
+INLINE
+void
+Method_IncreaseBranchNO(Method *method)
+{
+    assert(method);
+    method->numOfBranches++;
+}
+
+INLINE
+int
+Method_GetBranchNO(Method *method)
+{
+    assert(method);
+    return method->numOfBranches;
+}
+#endif /* VARIABLE_RET_COUNT */
+
+INLINE
+bool
+Method_HaveBranch(Method *method)
+{
+    assert(method);
+    return method->bcodeInfo & METHOD_HAVE_BRANCH;
+}
+
+INLINE
+void
+Method_SetHaveBranch(Method *method)
+{
+    assert(method);
+    method->bcodeInfo |= METHOD_HAVE_BRANCH;
+}
+
+INLINE
+bool
+Method_HaveReturn(Method *method)
+{
+    assert(method);
+    return method->bcodeInfo & METHOD_HAVE_RETURN;
+}
+
+INLINE
+void
+Method_SetHaveReturn(Method *method)
+{
+    assert(method);
+    method->bcodeInfo |= METHOD_HAVE_RETURN;
+}
+
+INLINE
+bool
+Method_HaveNullException(Method *method)
+{
+    assert(method);
+    return method->bcodeInfo & METHOD_HAVE_NULLEH;
+}
+
+INLINE
+void
+Method_SetHaveNullException(Method *method)
+{
+    assert(method);
+    method->bcodeInfo |= METHOD_HAVE_NULLEH;
+}
+
+INLINE
+void
+Method_SetHaveInvoke(Method *method)
+{
+    assert(method);
+    method->bcodeInfo |= METHOD_HAVE_INVOKE;
+}
+
+INLINE
+bool
+Method_HaveInvoke(Method *method)
+{
+    assert(method);
+    return method->bcodeInfo & METHOD_HAVE_INVOKE;
+}
+
+INLINE
+void
+Method_SetHaveUnresolved(Method *method)
+{
+    assert(method);
+    method->bcodeInfo |= METHOD_HAVE_UNRESOLVED;
+}
+
+INLINE
+bool
+Method_HaveUnresolved(Method *method)
+{
+    assert(method);
+    return method->bcodeInfo & METHOD_HAVE_UNRESOLVED;
+}
+
+INLINE
+void
+Method_SetHaveAthrow(Method *method)
+{
+    assert(method);
+    method->bcodeInfo |= METHOD_HAVE_ATHROW;
+}
+
+INLINE
+bool
+Method_HaveAthrow(Method *method)
+{
+    assert(method);
+    return method->bcodeInfo |= METHOD_HAVE_ATHROW;
+}
+
+INLINE
+Hjava_lang_Class *
+Object_GetClass(Hjava_lang_Object *obj)
+{
+    assert(obj);
+    return obj->dtable->class;
+	
+}
+
+INLINE
+struct _dispatchTable *
+Object_GetVirtualTable(Hjava_lang_Object *obj)
+{
+    assert(obj);
+    return obj->dtable;
+}

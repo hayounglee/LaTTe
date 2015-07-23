@@ -1,0 +1,210 @@
+/* SpecializedMethod.ic
+   inline functions of SpecializedMethod, SpecializedMethodSet
+   and CallContext structure.
+   
+   Written by: Junpyo Lee <walker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+#include <assert.h>
+
+#define L_ALLOC(a)  gc_malloc_fixed(a)
+#define L_FREE(a)   gc_free(a)
+
+// static methods
+INLINE bool 
+SM_is_general_type(Hjava_lang_Class* class) { return class == GeneralType; }
+INLINE bool 
+SM_is_special_type(Hjava_lang_Class* class) { return class == SpecialType; }
+
+
+
+/* Name        : static methods & member methods of SpecializedMethod
+   Description : self-explanatory
+   Maintainer  : Junpyo Lee <walker@altair.snu.ac.kr>
+   Pre-condition:
+   Post-condition:
+   Notes:  */
+INLINE SpecializedMethod* 
+SM_new(Hjava_lang_Class* type, Method* meth)
+{
+    SpecializedMethod* sm = 
+        (SpecializedMethod*)L_ALLOC(sizeof(SpecializedMethod));
+    sm->receiverType = type; 
+    sm->method = meth;
+    return sm;
+}
+
+INLINE void 
+SM_SetReceiverType(SpecializedMethod* sm, Hjava_lang_Class* type) { sm->receiverType = type; }
+
+INLINE Hjava_lang_Class* 
+SM_GetReceiverType(SpecializedMethod* sm) { return sm->receiverType; }
+
+INLINE bool
+SM_IsGeneralType(SpecializedMethod* sm) { return (sm->receiverType) == GeneralType; }
+
+INLINE bool
+SM_IsSpecialType(SpecializedMethod* sm) { return (sm->receiverType) == SpecialType; }
+
+
+INLINE void 
+SM_SetNativeCode(SpecializedMethod* sm, void* code) { sm->ncode = code; }
+
+INLINE void* 
+SM_GetNativeCode(SpecializedMethod* sm) { return sm->ncode; }
+
+INLINE Method*
+SM_GetMethod(SpecializedMethod* sm) { return sm->method; }
+
+INLINE void
+SM_SetArgSet(SpecializedMethod* sm, ArgSet* as) { sm->argset = as; }
+
+INLINE ArgSet*
+SM_GetArgSet(SpecializedMethod* sm) { return sm->argset; }
+
+INLINE void*
+SM_GetTrampCode(SpecializedMethod* sm) { assert(sm); return sm->trampCode; }
+
+INLINE void
+SM_SetTrampCode(SpecializedMethod* sm, void* code) { assert(sm); sm->trampCode = code; }
+
+#ifdef INLINE_CACHE
+INLINE struct TypeChecker_t*
+SM_GetTypeChecker(SpecializedMethod* sm) { assert(sm); return sm->tc; }
+
+INLINE void
+SM_SetTypeChecker(SpecializedMethod* sm, struct TypeChecker_t* tc) { assert(sm); sm->tc = tc; }
+#endif
+
+
+
+
+/* Name        : static methods & member methods of SpecializedMethodSet
+   Description : self-explanatory
+   Maintainer  : Junpyo Lee <walker@altair.snu.ac.kr>
+   Pre-condition:
+   Post-condition:
+   Notes:  */
+INLINE SpecializedMethodSet* 
+SMS_new(int32 count)
+{
+    SpecializedMethodSet* sms = 
+        (SpecializedMethodSet*) L_ALLOC(sizeof(SpecializedMethodSet));
+    sms->capacity = count;
+//    sms->count = 0;
+    sms->set = 
+        (SpecializedMethod**) L_ALLOC(sizeof(SpecializedMethod*) * count);
+    return sms;
+}
+
+
+INLINE void 
+SMS_AddSM(SpecializedMethodSet* sms, SpecializedMethod* sm)
+{
+    assert(sms);
+    assert(sm);
+    if (sms->capacity == sms->count) {
+        int32 i;
+        SpecializedMethod** old = sms->set;
+        sms->capacity *= 2;
+        sms->set = 
+            (SpecializedMethod**) L_ALLOC(sizeof(SpecializedMethod*) * sms->capacity);
+        for (i = 0; i < sms->count; i++) {
+            sms->set[i] = old[i];
+        }
+        gc_free(old);
+    }
+    sms->set[sms->count++] = sm;
+}
+
+INLINE SpecializedMethod*
+SMS_GetTypeElement(SpecializedMethodSet* sms, Hjava_lang_Class* type)
+{
+    int32 i;
+    for(i = 0; i < sms->count; i++){
+        if (SM_GetReceiverType(sms->set[i]) == type)
+          return sms->set[i];
+    }
+    return NULL;
+}
+
+INLINE SpecializedMethod*
+SMS_GetIdxElement(SpecializedMethodSet* sms, int32 idx)
+{
+    assert(sms);
+    assert(idx < sms->count);
+    return sms->set[idx];
+}
+
+
+INLINE SpecializedMethod*
+SMS_GetSpecialElement(SpecializedMethodSet* sms, ArgSet* argset) 
+{
+    int32 i;
+    for (i = 0; i < sms->count; i++) {
+        if (SM_IsSpecialType(sms->set[i]))
+          if (AS_IsEqualArgSet(SM_GetArgSet(sms->set[i]), argset))
+            return sms->set[i];
+    }
+    return NULL;
+}
+
+INLINE int32 
+SMS_GetSize(SpecializedMethodSet* sms) { return sms->count; }
+
+INLINE void*
+SMS_GetNativeCode(SpecializedMethodSet* sms, Hjava_lang_Class* type)
+{
+    SpecializedMethod* sm;
+    assert(sms);
+
+    sm = SMS_GetTypeElement(sms, type);
+    if (sm == NULL) return NULL;
+
+    return SM_GetNativeCode(sm);
+}
+
+
+
+
+
+/* Name        : static methods & member methods of CallContext
+   Description : self-explanatory
+   Maintainer  : Junpyo Lee <walker@altair.snu.ac.kr>
+   Pre-condition:
+   Post-condition:
+   Notes:  */
+INLINE CallContext*
+CC_new(int32 meth_idx, ArgSet* k_set)
+{
+    CallContext* cc =
+        (CallContext*) L_ALLOC(sizeof(CallContext));
+
+    cc->knownSet = k_set;
+    cc->methIdx = meth_idx;
+
+    return cc;
+}
+
+INLINE ArgSet*
+CC_GetKnownSet(CallContext* cc) { assert(cc); return cc->knownSet; }
+
+INLINE void
+CC_SetKnownSet(CallContext* cc, ArgSet* as) { assert(cc); cc->knownSet = as; }
+
+INLINE int32
+CC_GetMethodIdx(CallContext* cc) { assert(cc); return cc->methIdx; }
+
+INLINE void
+CC_SetMethodIdx(CallContext* cc, int32 meth_idx) { assert(cc); cc->methIdx = meth_idx; }
+
+INLINE void*
+CC_GetTrampCode(CallContext* cc) { assert(cc); return cc->trampCode; }
+
+INLINE void
+CC_SetTrampCode(CallContext* cc, void* code) { assert(cc); cc->trampCode = code; }
+

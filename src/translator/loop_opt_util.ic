@@ -1,0 +1,517 @@
+/* loop_opt.ic
+
+   Utility functions for loop optimization.
+
+   Written by: Jinpyo Park <jp@altair.snu.ac.kr>
+
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+/*======================================================================
+  macros
+======================================================================*/
+#define IS_SIMM13(x) ((x)>=MIN_SIMM13 && (x)<=MAX_SIMM13)
+
+#define FORWARD_SCAN_BV(var, bitvec, bitsize, start) \
+for ((var) = next_set_bit((bitvec), (bitsize), (start)); \
+     (var) != -1; \
+     (var) = next_set_bit((bitvec), (bitsize), (var)))
+
+#define BACKWARD_SCAN_BV(var, bitvec, start) \
+for ((var) = prev_set_bit((bitvec), (start)); \
+     (var) != -1; \
+     (var) = prev_set_bit((bitvec), (var)))
+
+#ifndef NDEBUG
+#define SET_LOOP_ID(i) \
+{ (i)->loop_instr_id = \
+   Instr_GetSucc(loop_entry_outer_pred_instr, \
+                 loop_entry_outer_pred_instr_succ_num)->loop_instr_id; }
+#else
+#define SET_LOOP_ID(i) 
+#endif
+
+/*======================================================================
+  Bit vector manipulation
+======================================================================*/
+inline static bool
+is_zero_bv(word* bv, int bv_size)
+{
+    register int i;
+    for (i=0; i<bv_size; i++) if (bv[i] != 0) return false;
+    return true;
+}
+
+inline static bool
+compare_bv(word* bv1, word* bv2, int bv_size)
+{
+    register int i;
+    for (i=0; i<bv_size; i++) if (bv1[i] != bv2[i]) return false;
+    return true;
+}
+
+inline static int
+next_set_bit(word* bv, int bit_size, int cur_set_bit)
+{
+    register int i;
+    for (i=cur_set_bit+1; i<bit_size; i++) if (BV_IsSet(bv, i)) return i;
+    return -1;
+}
+
+inline static int
+prev_set_bit(word* bv, int cur_set_bit)
+{
+    register int i;
+    for (i=cur_set_bit-1; i>=0; i--) if (BV_IsSet(bv, i)) break;
+    return i;
+}
+
+/*======================================================================
+  Instruction manipulation
+======================================================================*/
+/* Temporary enlisting of peeled instructions to resolve. */
+static InstrToResolve* peeled_resolve_instr_list;
+static InstrToResolve* peeled_resolve_instr_last_entry;
+
+inline static void
+init_peeled_resolve_instr_list(void)
+{
+    peeled_resolve_instr_list = NULL;
+    peeled_resolve_instr_last_entry = NULL;
+}
+
+inline static void
+add_peeled_resolve_instr(InstrNode* c_instr, void* resolve_data)
+{
+    InstrToResolve* new_entry;
+    new_entry = create_resolve_instr_entry(c_instr, resolve_data);
+    if (peeled_resolve_instr_last_entry == NULL) peeled_resolve_instr_last_entry = new_entry;
+    new_entry->next = peeled_resolve_instr_list;
+    peeled_resolve_instr_list = new_entry;
+    Instr_SetUnresolved(c_instr);
+}
+
+inline static void
+intern_peeled_resolve_instr_list(CFG* cfg)
+{
+    if (peeled_resolve_instr_last_entry) {
+        peeled_resolve_instr_last_entry->next = cfg->resolveInstrList;
+        cfg->resolveInstrList = peeled_resolve_instr_list;
+    }
+}
+
+inline static void
+intern_loop_instr_in_array(int i, InstrNode* instr, int succ_num, int bb_num)
+{
+    loop_instr_array[i].instr = instr; 
+    loop_instr_array[i].successor_num = succ_num; 
+    loop_instr_array[i].basic_block_id = bb_num; 
+#ifndef NDEBUG
+    instr->loop_instr_id = 1;    /* for debugging purpose */
+#endif
+}             
+
+/* Find the original register number of a source register of instr
+   by following ud-chain through copy operations. */
+static int
+get_org_src_reg(int instr_index, int src_num, word* def_instrs)
+{
+    int i, src_reg, org_reg;
+    word* ud_chain;
+
+    org_reg = -2;
+    src_reg = Instr_GetSrcReg(loop_instr_array[instr_index].instr, src_num);
+    ud_chain = loop_instr_array[instr_index].ud_chain;
+    FORWARD_SCAN_BV(i, ud_chain, loop_instr_array_size, -1) {
+        /* find actual definition of src_reg */
+        InstrNode* def_instr = loop_instr_array[i].instr;
+        if (Instr_GetDestReg(def_instr, 0) == src_reg) {
+            int cur_org_reg;
+            if (Instr_IsICopy(def_instr)) { /* integer copy */
+                cur_org_reg = get_org_src_reg(i, 0, def_instrs);
+            } else if (Instr_IsFCopy(def_instr)) { /* float copy */
+                cur_org_reg = get_org_src_reg(i, 1, def_instrs);
+            } else {    /* An inside-loop definition */
+                BV_SetBit(def_instrs, i); /* set i for def_instr */
+                cur_org_reg = src_reg;
+            }
+            if (org_reg == -2) {
+                /* no register has been set */
+                org_reg = cur_org_reg;
+            } else if (org_reg != cur_org_reg) {
+                /* current original reg is different from previous reg */
+                return -1;
+            }
+        }
+    }
+    if (org_reg == -2) {
+        /* no definition - then return the src reg */
+        return src_reg;
+    } 
+    return org_reg;
+}
+
+inline static void
+duplicate_instr(InstrNode* new_instr, InstrNode* old_instr)
+{
+    *new_instr = *old_instr;
+}
+
+inline static InstrNode*
+clone_instr(CFG* cfg, InstrNode* instr)
+{
+    InstrNode* new_instr = (InstrNode*)FMA_calloc(sizeof(InstrNode));
+    
+    duplicate_instr(new_instr, instr);
+    if (Instr_IsUnresolved(instr)) {
+        add_peeled_resolve_instr(new_instr, 
+                              get_resolve_data(Instr_GetResolveInfo(instr)));
+    }
+    /* clear existing information */
+    new_instr->predecessors = NULL;
+    new_instr->numOfPredecessors = 0;
+    new_instr->maxNumOfPredecessors = 0;
+    
+    new_instr->successors = NULL;
+    new_instr->numOfSuccessors = 0;
+    new_instr->maxNumOfSuccessors = 0;
+
+    instr->lastUsedRegs[0] = 0;
+    instr->lastUsedRegs[1] = 0;
+    instr->lastUsedRegs[2] = 0;
+
+    return new_instr;
+}
+
+inline static InstrNode*
+change_instr_to_copy(InstrNode* instr, int src_var, int dst_var)
+{
+    assert(Var_GetType(src_var) == Var_GetType(dst_var));
+
+    if (Var_GetType(src_var) == T_FLOAT) {
+        instr->instrCode = FMOVS;
+        instr->fields.format_6.srcReg_1 = g0;
+        instr->fields.format_6.srcReg_2 = src_var;
+    } 
+    else if (Var_GetType(src_var) == T_DOUBLE) {
+        instr->instrCode = FMOVD;
+        instr->fields.format_6.srcReg_1 = g0;
+        instr->fields.format_6.srcReg_2 = src_var;
+    } 
+    else {    /* integer copy */
+        instr->instrCode = ADD;
+        instr->fields.format_6.srcReg_1 = src_var;
+        instr->fields.format_6.srcReg_2 = g0;
+    }
+    /* common job */
+    instr->format = FORMAT_6;
+    instr->fields.format_6.destReg = dst_var;
+    instr->lastUsedRegs[0] = instr->lastUsedRegs[1] = 0;
+    
+    Instr_UnsetUnresolved(instr);
+    Instr_UnsetNeedMapInfo(instr);
+
+    return instr;
+}
+
+/* Get an opcode of a counterpart load instruction of the store opcode. */
+inline static int
+get_dual_load_instr_code(int store_instr_code)
+{
+    int load_instr_code = -1;
+    switch (store_instr_code) {
+      case ST:    load_instr_code = LD;     break;
+      case STB:   load_instr_code = LDUB;   break;
+      case STD:   load_instr_code = LDD;    break;
+      case STH:   load_instr_code = LDUH;   break;
+      case STF:   load_instr_code = LDF;    break;
+      case STDF:  load_instr_code = LDDF;   break;  
+      default:    assert(false);
+    }
+    return load_instr_code;
+}
+
+/* Get an opcode of a counterpart store instruction of the load opcode. */
+inline static int
+get_dual_store_instr_code(int load_instr_code)
+{
+    int store_instr_code = -1;
+    switch (load_instr_code) {
+      case LD:      store_instr_code = ST;      break;
+      case LDUB:    store_instr_code = STB;     break;
+      case LDSB:    store_instr_code = STB;     break;
+      case LDD:     store_instr_code = STD;     break;
+      case LDUH:    
+      case LDSH:    store_instr_code = STH;     break;
+      case LDF:     store_instr_code = STF;     break;
+      case LDDF:    store_instr_code = STDF;    break;
+      default:      assert(false);
+    }
+    return store_instr_code;
+}
+
+inline static InstrNode*
+find_next_dummy_instruction(InstrNode* c_instr, int path_num)
+{
+    InstrNode* next_instr = Instr_GetSucc(c_instr, path_num);
+    while (!Instr_IsNop(next_instr)) {
+        assert(Instr_GetNumOfSuccs(next_instr) == 1);
+        next_instr = Instr_GetSucc(next_instr, 0);
+    }
+    assert(Instr_GetCode(next_instr) == SETHI);
+    return next_instr;
+}
+
+inline static int
+get_copy_source_register(InstrNode* instr)
+{
+    assert(Instr_IsICopy(instr) || Instr_IsFCopy(instr));
+    return Instr_GetSrcReg(instr, (Instr_IsICopy(instr)) ? 0 : 1);
+}
+
+inline static int
+get_copy_destination_register(InstrNode* instr)
+{
+    assert(Instr_IsICopy(instr) || Instr_IsFCopy(instr));
+    return Instr_GetDestReg(instr, 0);
+}
+
+inline static int
+get_load_destination_register(InstrNode* instr)
+{
+    assert(Instr_IsLoad(instr));
+    return Instr_GetDestReg(instr, 0);
+}
+
+inline static int
+get_store_source_register(InstrNode* instr)
+{
+    assert(Instr_IsStore(instr));
+    return Instr_GetSrcReg(instr, (instr->format == FORMAT_7) ? 2 : 1);
+}
+
+inline static bool
+is_store_source_last_use(InstrNode* instr)
+{
+    assert(Instr_IsStore(instr));
+    return instr->lastUsedRegs[(instr->format == FORMAT_7) ? 2:1] != 0;
+}
+
+inline static bool
+is_icopy_for_loopopt(InstrNode* c_instr)
+{
+    if (c_instr->instrCode == ADD) {
+        if (c_instr->format == FORMAT_6) {
+            return (c_instr->fields.format_6.srcReg_1 == g0 ||
+                    c_instr->fields.format_6.srcReg_2 == g0 );
+        } else {
+            /* include a copy for iconst_0 */
+            return (c_instr->fields.format_5.simm13 == 0);
+        }
+    }
+    return false;
+}
+
+inline static bool
+is_fcopy_for_loopopt(InstrNode* c_instr)
+{
+    return Instr_IsFCopy(c_instr);
+}
+
+inline static bool
+is_live_at_exit(int instr_idx)
+{
+    int j;
+    word* du_chain = loop_instr_array[instr_idx].du_chain;
+    FORWARD_SCAN_BV(j, du_chain, loop_instr_array_size, -1) {
+        if (Instr_IsBranch(loop_instr_array[j].instr)) break;
+    } 
+    return (j != -1);
+}
+
+inline static void
+change_copy_into_nonmov(InstrNode* instr)
+{
+    /* Used to avoid coalescing */
+    assert(Instr_IsICopy(instr));
+    instr->instrCode = OR;
+}
+
+inline static bool
+is_dead_definition(InstrNode* instr, int instr_idx)
+{
+    return (Var_IsVariable(Instr_GetDestReg(instr, 0)) &&
+            is_zero_bv(loop_instr_array[instr_idx].du_chain, 
+                       loop_instr_array_bv_size));
+}
+
+/*======================================================================
+  Memory instruction and address expression manipulation
+======================================================================*/
+inline static MemInstr*
+get_mem_instr(int instr_idx)
+{
+    return &(mem_instr_array[loop_instr_array[instr_idx].mem_instr_array_index]);
+}
+
+inline static int
+get_mem_expr_idx(int instr_idx)
+{
+    return get_mem_instr(instr_idx)->iterator_idx;
+}    
+
+inline static MemExpr*
+get_mem_expr(int instr_idx)
+{
+    return mem_expr_hash_table_iterator[get_mem_expr_idx(instr_idx)];
+}    
+
+/*  Check if the two memory instructions access lexically same locations. */
+inline static bool
+compare_mem_instr_addr(int instr_idx1, int instr_idx2)
+{
+    MemExpr *expr1, *expr2;
+    MemInstr *instr1, *instr2;
+
+    instr1 = get_mem_instr(instr_idx1);
+    expr1 = get_mem_expr(instr_idx1);   
+
+    instr2 = get_mem_instr(instr_idx2);
+    expr2 = get_mem_expr(instr_idx2);
+    
+    return (expr1->field1 == expr2->field1 &&
+            expr1->field2 == expr2->field2 &&
+            compare_bv(instr1->addr_def_instr_bv, 
+                       instr2->addr_def_instr_bv, 
+                       loop_instr_array_bv_size));
+}
+
+DBG(
+/*======================================================================
+  Debugging
+  Note: This section will not be compiled if DBG is NULL.
+======================================================================*/
+void
+print_bv(word* bv, int size)
+{
+    int i;
+    for (i=0; i<size*sizeof(word)*8; i++) {    
+        if (BV_IsSet(bv, i)) printf("%d ", i);
+    }
+}
+
+void
+print_bv_endl(word* bv, int size)
+{
+    print_bv(bv, size);
+    printf("\n");
+}
+
+static void
+print_loop_instr_array(void)
+{
+    register int i;
+
+    for (i=loop_instr_array_size-1; i>=0; i--) {
+        printf("%2d, (path=%d)", i, loop_instr_array[i].successor_num);
+        Instr_PrintToStdout(loop_instr_array[i].instr);
+        if (loop_instr_array[i].du_chain) {
+            printf("  def:");
+            print_bv(loop_instr_array[i].du_chain, loop_instr_array_bv_size);
+        }
+        if (loop_instr_array[i].ud_chain) {
+            printf("  use:");
+            print_bv(loop_instr_array[i].ud_chain, loop_instr_array_bv_size);
+        }   
+        printf("\n");
+    }
+}
+    
+void
+_print_loop_as_xvcg(FILE* fp, InstrNode* instr, int visit_count)
+{
+    register int i;
+    InstrNode* header;
+
+    if (instr->loop_instr_id > visit_count) {
+        return;
+    } else if (instr->loop_instr_id < visit_count) {
+        fprintf(fp, "    node: { title: \"%p\" label: \"exit\" }\n", instr );
+        return;
+    }
+    /* The following works like a visited marker */
+    instr->loop_instr_id++;
+
+    fprintf(fp, "    node: { title: \"%p\" label: \"", instr );
+    fprintf(fp, "[%8p] ", instr);
+    Instr_Print(instr, fp, ' ');
+    
+    header = instr;
+    while (Instr_GetNumOfSuccs(instr) == 1&&
+           Instr_GetNumOfPreds(Instr_GetSucc(instr,0)) == 1)
+    {
+        instr = Instr_GetSucc(instr, 0);
+        fprintf(fp, "\n");
+        fprintf(fp, "[%8p] ", instr);
+        Instr_Print(instr, fp, ' ');
+        instr->loop_instr_id++;
+    }
+
+    fprintf(fp, "\" }\n");
+
+    for(i = 0; i < Instr_GetNumOfSuccs(instr); i++) {
+        assert( Instr_IsPred( Instr_GetSucc(instr, i), instr ) );
+        fprintf(fp, "    edge: { thickness: %d"
+                " sourcename: \"%p\" targetname: \"%p\" }\n",3+ i * 2, header,
+                Instr_GetSucc(instr, i) );
+            
+        _print_loop_as_xvcg(fp, Instr_GetSucc(instr, i), visit_count );
+    }
+}
+
+void
+print_loop_as_xvcg(FILE* fp, CFG* cfg, InstrNode* instr)
+{
+    register int i;
+    InlineGraph*    IG_root;
+    Method*         method;
+
+    /* Never use "CFG_traversal and its functions related to "visited mark",
+       or it will cause translate phase 3 to fail as Seongbae pointed. */
+    //CFG_PrepareTraversal(cfg);
+
+    IG_root = CFG_get_IG_root( cfg );
+    method = IG_GetMethod( IG_root );
+
+    fprintf(fp, "graph: {\n");
+    fprintf(fp, "   layoutalgorithm: minbackward\n");
+    fprintf(fp, "   finetuning: yes\n");
+
+    fprintf( fp, "    node: { title: \"mf\" label: \"A loop of %s:%s\n %s (%p)",
+             Class_GetName( Method_GetDefiningClass( method ) )->data,
+             Method_GetName( method )->data,
+             Method_GetSignature( method )->data,
+             method );
+    fprintf(fp,"(");
+    for(i = 0; i < CFG_GetNumOfParameters(cfg);i++) {
+        fprintf(fp, " %s", Var_get_var_reg_name(CFG_GetParameter(cfg, i) ) );
+    };
+    fprintf(fp,") \"} ");
+    fprintf( fp, "    edge: { thickness: 3"
+             " sourcename: \"mf\" targetname: \"%p\" }\n", instr );
+
+    /* instr->loop_instr_id == 0 when instr is not a loop instruction.
+       It also works as a visited flag. */ 
+    _print_loop_as_xvcg(fp, instr, instr->loop_instr_id);
+    fprintf(fp, "}\n");
+}
+) // DBG
+
+
+
+
+
+

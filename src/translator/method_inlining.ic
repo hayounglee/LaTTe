@@ -1,0 +1,685 @@
+/* -*- mode: C -*-
+   method_inlining.ic
+   
+   various function definitions related method inlining
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+struct InstrNode;
+struct ArgSet_t;
+struct ExceptionInfoTable;
+struct _jexception;
+struct _methods;
+
+#include "gc.h"
+#include "classMethod.h"
+#include "exception.h"
+extern void *FMA_calloc(int size);
+
+INLINE
+MethodInstance *
+MI_alloc(void)
+{
+    return gc_malloc_fixed(sizeof(MethodInstance));
+}
+
+INLINE
+struct _methods *
+MI_GetMethod(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->method;
+}
+
+INLINE
+void
+MI_SetMethod(MethodInstance *this, struct _methods *method)
+{
+    assert(this != NULL);
+
+    this->method = method;
+}
+
+INLINE
+int
+MI_GetRetBPC(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->retBPC;
+}
+
+INLINE
+void
+MI_SetRetBPC(MethodInstance *this, int bpc)
+{
+    assert(this != NULL);
+
+    this->retBPC = bpc;
+}
+
+INLINE
+void *
+MI_GetRetNativePC(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->retNativePC;
+}
+
+INLINE
+void
+MI_SetRetNativePC(MethodInstance *this, void *pc)
+{
+    assert(this != NULL);
+
+    this->retNativePC = pc;
+}
+
+INLINE
+int *
+MI_GetCallerVarMap(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->callerVarMap;
+}
+
+INLINE
+void
+MI_SetCallerVarMap(MethodInstance *this, int *var_map)
+{
+    assert(this != NULL);
+
+    this->callerVarMap = var_map;
+}
+
+INLINE
+int
+MI_GetCallerLocalNO(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->callerLocalNO;
+}
+
+INLINE
+void
+MI_SetCallerLocalNO(MethodInstance *this, int local_no)
+{
+    assert(this != NULL);
+
+    this->callerLocalNO = local_no;
+}
+
+INLINE
+int
+MI_GetCallerStackNO(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->callerStackNO;
+}
+
+INLINE
+void
+MI_SetCallerStackNO(MethodInstance *this, int stack_no)
+{
+    assert(this != NULL);
+
+    this->callerStackNO = stack_no;
+}
+
+INLINE
+void
+MI_SetCaller(MethodInstance *this, MethodInstance *caller)
+{
+    assert(this != NULL);
+
+    this->caller = caller;
+}
+
+INLINE
+MethodInstance *
+MI_GetCaller(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->caller;
+}
+
+INLINE
+void
+MI_SetRetStackTop(MethodInstance *this, int stackTop)
+{
+    assert(this != NULL);
+    
+    this->retStackTop = stackTop;
+}
+
+INLINE
+int
+MI_GetRetStackTop(MethodInstance *this)
+{
+    assert(this != NULL);
+    
+    return this->retStackTop;
+}
+
+INLINE
+struct ExceptionInfoTable *
+MI_GetExceptionInfoTable(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return this->exceptionInfoTable;
+}
+
+INLINE
+bool
+MI_IsEmptyTranslatedEHCodes(MethodInstance *this)
+{
+    assert(this != NULL);
+
+    return (this->translatedEHCodes == NULL);
+}
+
+/* Name        : MI_AllocTranslatedEHCodes
+   Description : For correct exception handling allocate translated
+                 codes and variable maps
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+void
+MI_AllocTranslatedEHCodes(MethodInstance *this)
+{
+    struct _methods *method;
+    struct _jexception *table;
+    int table_len;
+
+    assert(this != NULL);
+
+    method = MI_GetMethod(this);
+    table = Method_GetExceptionTable(method);
+
+    assert(table != NULL);
+
+    table_len = JE_GetLength(table);
+
+    this->translatedEHCodes = (void **)
+	gc_malloc_fixed(sizeof(void *) * table_len);
+    this->initEHVarMap = (void **) gc_malloc_fixed(sizeof(void *) * table_len);
+    this->localVarNO = (int *) gc_malloc_fixed(sizeof(int) * table_len);
+    this->stackVarNO = (int *) gc_malloc_fixed(sizeof(int) * table_len);
+}
+
+INLINE
+nativecode *
+MI_GetTranslatedEHCode(MethodInstance *this, int idx)
+{
+    assert(this != NULL);
+    assert(this->translatedEHCodes != NULL);
+
+    return this->translatedEHCodes[idx];
+}
+
+INLINE
+void
+MI_SetTranslatedEHCode(MethodInstance *this, int idx, nativecode *code)
+{
+    assert(this != NULL);
+    assert(this->translatedEHCodes != NULL);
+    assert(code != NULL);
+
+    this->translatedEHCodes[idx] = code;
+}
+
+INLINE
+void *
+MI_GetInitEHVarMap(MethodInstance *this, int idx)
+{
+    assert(this != NULL);
+    assert(this->initEHVarMap != NULL);
+
+    return this->initEHVarMap[idx];
+}
+
+INLINE
+void
+MI_SetInitEHVarMap(MethodInstance *this, int idx, void *map)
+{
+    assert(this != NULL);
+    assert(this->initEHVarMap != NULL);
+    assert(map != NULL);
+
+    this->initEHVarMap[idx] = map;
+}
+
+INLINE
+int
+MI_GetLocalVarNO(MethodInstance *this, int idx)
+{
+    assert(this != NULL);
+    assert(this->localVarNO != NULL);
+
+    return this->localVarNO[idx];
+}
+
+INLINE
+void
+MI_SetLocalVarNO(MethodInstance *this, int idx, int localVarNO)
+{
+    assert(this != NULL);
+    assert(this->localVarNO != NULL);
+
+    this->localVarNO[idx] = localVarNO;
+}
+
+INLINE
+int
+MI_GetStackVarNO(MethodInstance *this, int idx)
+{
+    assert(this != NULL);
+    assert(this->stackVarNO != NULL);
+
+    return this->stackVarNO[idx];
+}
+
+INLINE
+void
+MI_SetStackVarNO(MethodInstance *this, int idx, int stackVarNO)
+{
+    assert(this != NULL);
+    assert(this->stackVarNO != NULL);
+
+    this->stackVarNO[idx] = stackVarNO;
+}
+
+INLINE
+void
+MI_SetLaTTeTranslated(MethodInstance *this)
+{
+    this->JITLevel = AGGRESSIVE_JIT;
+}
+
+INLINE
+bool
+MI_IsLaTTeTranslated(MethodInstance *this)
+{
+    return this->JITLevel == AGGRESSIVE_JIT;
+}
+
+INLINE
+void
+MI_SetKaffeTranslated(MethodInstance *this)
+{
+    this->JITLevel = KAFFE_JIT;
+}
+
+INLINE
+bool
+MI_IsKaffeTranslated(MethodInstance *this)
+{
+    return this->JITLevel == KAFFE_JIT;
+}
+
+INLINE
+void
+IG_SetMI(InlineGraph *this, MethodInstance *instance)
+{
+    assert(this != NULL);
+
+    this->methodInstance = instance;
+}
+
+INLINE
+MethodInstance *
+IG_GetMI(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->methodInstance;
+}
+
+INLINE
+InlineGraph *
+IG_alloc(void)
+{
+    return (InlineGraph*)FMA_calloc(sizeof(InlineGraph));
+}
+
+INLINE
+InlineGraph *
+IG_init(struct _methods *method)
+{
+    InlineGraph *graph = IG_alloc();
+    MethodInstance *instance = MI_alloc();
+
+    MI_SetMethod(instance, method);
+    IG_SetMI(graph, instance);
+
+    return graph;
+}
+
+INLINE
+void
+IG_SetBPC(InlineGraph *this, int bpc)
+{
+    assert(this != NULL);
+
+    MI_SetRetBPC(IG_GetMI(this), bpc);
+}
+
+INLINE
+int
+IG_GetBPC(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return MI_GetRetBPC(IG_GetMI(this));
+}
+
+INLINE
+void
+IG_SetDepth(InlineGraph *this, int depth)
+{
+    assert(this != NULL);
+
+    this->depth = depth;
+}
+
+INLINE
+int
+IG_GetDepth(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->depth;
+}
+
+INLINE
+InlineGraph *
+IG_GetCaller(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->caller;
+}
+
+INLINE
+void
+IG_SetCaller(InlineGraph *this, InlineGraph *caller)
+{
+    MethodInstance *caller_instance;
+    MethodInstance *callee_instance;
+    
+    assert(this != NULL);
+
+    this->caller = caller;
+
+    /* caller relation in method instance */
+    caller_instance = IG_GetMI(caller);
+    callee_instance = IG_GetMI(this);
+    MI_SetCaller(callee_instance, caller_instance);
+}
+
+INLINE
+InlineGraph *
+IG_GetCallee(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->callee;
+}
+
+INLINE
+void
+IG_SetCallee(InlineGraph *this, InlineGraph *callee)
+{
+    assert(this != NULL);
+
+    this->callee = callee;
+}
+
+INLINE
+InlineGraph *
+IG_GetNextCallee(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->nextCallee;
+}
+
+INLINE
+void
+IG_SetNextCallee(InlineGraph *this, InlineGraph *nextCallee)
+{
+    assert(this != NULL);
+
+    this->nextCallee = nextCallee;
+}
+
+INLINE
+struct _methods *
+IG_GetMethod(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return MI_GetMethod(IG_GetMI(this));
+}
+
+INLINE
+int
+IG_GetLocalOffset(InlineGraph *graph)
+{
+    MethodInstance *mi;
+    assert(graph);
+
+    mi = IG_GetMI(graph);
+    
+    return MI_GetCallerLocalNO(mi);
+}
+
+INLINE
+int
+IG_GetStackOffset(InlineGraph *graph)
+{
+    MethodInstance *mi;
+    assert(graph);
+
+    mi = IG_GetMI(graph);
+    
+    return MI_GetCallerStackNO(mi);
+}
+
+INLINE
+void
+IG_SetLocalOffset(InlineGraph *graph, int offset)
+{
+    MethodInstance *mi;
+    assert(graph);
+
+    mi = IG_GetMI(graph);
+    MI_SetCallerLocalNO(mi, offset);
+}
+
+INLINE
+void
+IG_SetStackOffset(InlineGraph *graph, int offset)
+{
+    MethodInstance *mi;
+    assert(graph);
+
+    mi = IG_GetMI(graph);
+    MI_SetCallerStackNO(mi, offset);
+}
+
+/* Name        : IG_SetCallerCalleeRelation
+   Description : set caller and callee relations between two inline
+                 graph node
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+void
+IG_SetCallerCalleeRelation(InlineGraph *this, InlineGraph *callee)
+{
+    Method *caller_method;
+    int caller_depth;
+    int callee_local_offset;
+    int callee_stack_offset;
+
+    caller_method = IG_GetMethod(this);
+    
+    caller_depth = IG_GetDepth(this);
+    IG_SetDepth(callee, caller_depth + 1);
+
+    callee_local_offset = IG_GetLocalOffset(this);
+    callee_stack_offset = IG_GetStackOffset(this);
+    callee_local_offset += Method_GetLocalSize(caller_method);
+    callee_stack_offset += Method_GetStackSize(caller_method);
+
+    IG_SetLocalOffset(callee, callee_local_offset);
+    IG_SetStackOffset(callee, callee_stack_offset);
+    
+    if (IG_GetCallee(this) == NULL) {
+        IG_SetCallee(this, callee);
+        IG_SetCaller(callee, this);
+    } else {
+        InlineGraph *graph = IG_GetCallee(this);
+
+        IG_SetCallee(this, callee);
+        IG_SetCaller(callee, this);
+        IG_SetNextCallee(callee, graph);
+    }
+}
+
+INLINE
+int
+IG_GetStackTop(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return MI_GetRetStackTop(IG_GetMI(this));
+}
+
+INLINE
+void
+IG_SetStackTop(InlineGraph *this, int stack_top)
+{
+    assert(this != NULL);
+
+    MI_SetRetStackTop(IG_GetMI(this), stack_top);
+}
+
+INLINE
+void
+IG_SetHead(InlineGraph *this, struct InstrNode *head)
+{
+    assert(this != NULL);
+
+    this->head = head;
+}
+
+INLINE
+void
+IG_SetTail(InlineGraph *this, struct InstrNode *tail)
+{
+    assert(this != NULL);
+
+    this->tail = tail;
+}
+
+INLINE
+void
+IG_SetInstr(InlineGraph *this, struct InstrNode *instr)
+{
+    assert(this != NULL);
+
+    this->instr = instr;
+}
+
+INLINE
+struct InstrNode *
+IG_GetHead(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->head;
+}
+
+INLINE
+struct InstrNode *
+IG_GetTail(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->tail;
+}
+
+INLINE
+struct InstrNode *
+IG_GetInstr(InlineGraph *this)
+{
+    assert(this != NULL);
+
+    return this->instr;
+}
+
+INLINE
+void
+IG_DeregisterMethods(InlineGraph *graph)
+{
+    assert(graph);
+
+    /* current nullify system is not correct.
+       so this function should be called without registered methods */
+    assert(graph->callee == NULL);
+    
+    graph->callee = NULL;
+}
+
+#ifdef TYPE_ANALYSIS
+INLINE
+struct ArgSet_t * 
+IG_GetArgSet(InlineGraph* graph)
+{
+    assert(graph);
+    return graph->argset;
+}
+INLINE
+void
+IG_SetArgSet(InlineGraph* graph, struct ArgSet_t* argset)
+{
+    assert(graph);
+    graph->argset = argset;
+}
+
+INLINE
+int
+IG_GetStartInstrNum(InlineGraph* graph)
+{
+    assert(graph);
+    return graph->startInstrNum;
+}
+
+INLINE
+void
+IG_SetStartInstrNum(InlineGraph* graph, int num)
+{
+    assert(graph);
+    graph->startInstrNum = num;
+}
+#endif

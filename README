@@ -1,0 +1,39 @@
+README for LaTTe
+================
+
+LaTTe is a virtual machine designed to execute Java bytecodes (we're
+not calling it a Java virtual machine here since it hasn't actually
+passed the Java compatibility tests).  It is supposed to be a research
+prototype for implementing various optimization techniques.
+
+LaTTe includes a fast and effective JIT compiler, and has a basic
+framework for supporting adaptive compilation, which includes a
+reasonably fast interpreter.
+
+Since the primary purpose of this machine is the study of better
+optimizations for runtime compilers, it is not very complete besides
+the translator itself.  It doesn't support JNI nor the AWT library,
+for example.
+
+The machine runs only on Solaris 2.5 or higher on UltraSPARCs.  The
+GNU C Compiler is required to build it (the versions used for
+development were 2.7.2.3.f.1 and 2.95.1, although other versions
+higher than 2.7.2 should also work).
+
+For installation instructions, read the file INSTALL.  For licensing
+terms, read the file LICENSE.  Also, a user manual written in Texinfo
+is available in the doc/ directory.
+
+Bugs not listed in the BUGS file or missing features not listed in the
+TODO file should be reported to <latte-bugs@pallas.snu.ac.kr>, or
+alternatively with the bug reporting form located at the LaTTe home
+page.  Patches to fix these bugs would of course be welcome (as long
+as they're correct!).
+
+If you incorporate part or all of LaTTe in some commercial product or
+research project, we would appreciate it if you acknowledge Seoul
+National University.  (Of course, doing so doesn't absolve you from
+having to include all the copyrights, licensing conditions, and
+disclaimers as outlined in the license.)
+
+For more information on LaTTe, visit <http://latte.snu.ac.kr/>.

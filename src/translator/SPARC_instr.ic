@@ -1,0 +1,106 @@
+/* SPARC_instr.ic
+   
+   Inline functions for assembling SPARC instructions
+   
+   Written by: Junpyo Lee <walker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+INLINE unsigned 
+assemble_instr1(unsigned opcode, unsigned disp30)
+{
+    assert((0xc0000000 & opcode) == opcode);
+    
+    return (opcode | (0x3fffffff & disp30));
+}
+
+INLINE unsigned
+assemble_instr2(unsigned opcode, int dst_reg, unsigned imm22)
+{
+    assert((0xfffc0000 & opcode) == opcode);
+    assert((0x1f & dst_reg) == dst_reg);
+    assert((0x3fffff & imm22) == imm22);
+
+    return (opcode | (dst_reg << 25) | imm22);
+}
+
+INLINE unsigned
+assemble_instr3(unsigned opcode, int disp19)
+{
+    assert((0xfff80000 & opcode) == opcode);
+    assert((disp19 >= MIN_DISP19) && (disp19 <= MAX_DISP19));
+
+    return (opcode | (MASK_DISP19 & disp19));
+}
+
+INLINE unsigned
+assemble_instr4(unsigned opcode, int dst_reg, int src_reg1, int src_reg2)
+{
+    assert((0xc1fc3fe0 & opcode) == opcode);
+    assert((0x1f & dst_reg) == dst_reg);
+    assert((0x1f & src_reg1) == src_reg1);
+    assert((0x1f & src_reg2) == src_reg2);
+
+    return (opcode | (dst_reg << 25) | (src_reg1 << 14) | src_reg2);
+}
+
+INLINE unsigned
+assemble_instr5(unsigned opcode, int dst_reg, int src_reg, int simm13)
+{
+    assert((0x1f & dst_reg) == dst_reg);
+    assert((0x1f & src_reg) == src_reg);
+    assert((simm13 >= MIN_SIMM13) && (simm13 <= MAX_SIMM13));
+
+    return (opcode | (0x1 << 13) | (dst_reg << 25) | (src_reg << 14) | 
+            (MASK_SIMM13 & simm13));
+}
+
+INLINE unsigned
+assemble_instr6(unsigned opcode, int dst_reg, int src_reg1, int src_reg2)
+{
+    assert((0xc1fc3fe0 & opcode) == opcode);
+    assert((0x1f & dst_reg) == dst_reg);
+    assert((0x1f & src_reg1) == src_reg1);
+    assert((0x1f & src_reg2) == src_reg2);
+
+    return (opcode | (dst_reg << 25) | (src_reg1 << 14) | src_reg2);
+}
+
+INLINE unsigned
+assemble_instr7(unsigned opcode, int src_reg1, int src_reg2, int src_reg3)
+{
+    assert((0xc1fc0000 & opcode) == opcode);
+    assert((0x1f & src_reg1) == src_reg1);
+    assert((0x1f & src_reg2) == src_reg2);
+    assert((0x1f & src_reg3) == src_reg3);
+
+    return (opcode | (src_reg1 << 25) | (src_reg2 << 14) | src_reg3);
+}
+
+INLINE unsigned
+assemble_instr8(unsigned opcode, int src_reg1, int src_reg2, int simm13)
+{
+    assert((0xc1fc0000 & opcode) == opcode);
+    assert((0x1f & src_reg1) == src_reg1);
+    assert((0x1f & src_reg2) == src_reg2);
+    assert((simm13 >= MIN_SIMM13) && (simm13 <= MAX_SIMM13));
+
+    return (opcode | (0x1 << 13) | (src_reg1 << 25) | (src_reg2 << 14) | 
+            (MASK_SIMM13 & simm13));
+}
+
+INLINE unsigned
+assemble_instr9(unsigned opcode, int trap_num)
+{
+    return (opcode | trap_num);
+}
+
+INLINE unsigned
+assemble_nop()
+{
+    return SPARC_NOP;
+}
+

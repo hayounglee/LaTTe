@@ -1,0 +1,181 @@
+/* -*- mode: C -*-
+   AllocStat.ic
+   
+   inline functions to manipulate the register allocation status
+   
+   Written by: Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+#include "fast_mem_allocator.h"
+#include "CFG.h"
+
+INLINE
+map*
+map_Init(map *h)
+{
+    int i;
+
+    h->map = (int *)FMA_calloc(sizeof(int) * CFG_GetNumOfVars(cfg));
+    for(i = 0; i < CFG_GetNumOfVars(cfg); i++) {
+        h->map[i] = -1;
+    }
+    return h;
+}
+
+INLINE
+map*
+map_alloc(void)
+{
+    map * h = (map *)FMA_calloc(sizeof(map));
+
+    return h;
+}
+
+INLINE
+map*
+map_Clone_from_alloc_status(AllocStat *h)
+{
+    map * ret = map_Init(map_alloc());
+
+    bcopy(h->map, ret->map, sizeof(int) * CFG_GetNumOfVars(cfg));
+    return ret;
+}
+
+INLINE
+map*
+map_Clone(map *h)
+{
+    map * ret = map_Init(map_alloc());
+
+    bcopy(h->map, ret->map, sizeof(int) * CFG_GetNumOfVars(cfg));
+    return ret;
+}
+
+INLINE
+void map_Insert(map *h, int v, int p)
+{
+    assert(h);
+    assert(CFG_get_var_number(v) < CFG_GetNumOfVars(cfg));
+
+    h->map[CFG_get_var_number(v)] = p;
+}
+
+INLINE
+int
+map_Find(map *h, int v)
+{
+    assert(h);
+    assert(CFG_get_var_number(v) < CFG_GetNumOfVars(cfg));
+    return h->map[CFG_get_var_number(v)];
+}
+
+INLINE
+void map_Erase(map *h, int v)
+{
+    assert(h);
+    assert(CFG_get_var_number(v) < CFG_GetNumOfVars(cfg));
+
+    h->map[CFG_get_var_number(v)] = -1;
+}
+
+INLINE
+AllocStat*
+AllocStat_alloc(void)
+{
+    return (AllocStat *)FMA_calloc(sizeof(AllocStat));
+}
+
+INLINE
+AllocStat* 
+AllocStat_alloc_by_gc_malloc_fixed(void) 
+{
+    return (AllocStat *)gc_malloc_fixed(sizeof(AllocStat));
+}
+
+INLINE
+int
+AllocStat_Find(AllocStat *h, int v)
+{
+    assert(CFG_get_var_number(v) >= 0
+            && CFG_get_var_number(v) < CFG_GetNumOfVars(cfg));
+
+    return h->map[CFG_get_var_number(v)];
+}
+
+INLINE
+void
+AllocStat_Erase(AllocStat *h, int v)
+{
+    int r;
+
+    assert(CFG_get_var_number(v) >= 0
+            && CFG_get_var_number(v) < CFG_GetNumOfVars(cfg));
+
+    r = h->map[CFG_get_var_number(v)];
+    h->map[CFG_get_var_number(v)] = -1;
+    AllocStat_RemoveRMap(h, v, r);
+}
+
+INLINE
+int
+AllocStat_GetRefCount(AllocStat *h, int r)
+{
+    assert((r > 0 && r < CFG_GetNumOfStorageLocations(cfg)));
+
+    return h->refcount[r];
+}
+
+INLINE
+int*
+AllocStat_Find_variables(AllocStat *h, int r)
+{
+    assert(r > 0 && r < CFG_GetNumOfStorageLocations(cfg));
+    
+    switch(h->refcount[r]) {
+      case 0:
+        return NULL;
+      case 1:
+        return (int *)(&(h->rmap[r])); 
+      default:
+        return h->rmap[r];
+        break;
+    }
+}
+
+/* replace the map of v with r */
+INLINE
+void
+AllocStat_ChangeMappedReg(AllocStat *h, int v, int r)
+{
+    int old;
+
+    assert(CFG_get_var_number(v) >= 0
+            && CFG_get_var_number(v) < CFG_GetNumOfVars(cfg));
+    assert(r > 0 && r < CFG_GetNumOfStorageLocations(cfg));
+
+    old = h->map[CFG_get_var_number(v)];
+    h->map[CFG_get_var_number(v)] = r;
+    AllocStat_RemoveRMap(h, v, old);
+    AllocStat_AppendRMap(h, v, r);
+
+    assert(Var_GetType(v) != T_DOUBLE ||
+           AllocStat_GetRefCount(h,r)==AllocStat_GetRefCount(h,r+1));
+}
+
+INLINE
+int
+AllocStat_FindFreeStorage(AllocStat *h, VarType type)
+{
+    int new_r = AllocStat_FindFreeReg(h, type);
+
+    if (Reg_IsHW(new_r)) {
+        return new_r;
+    }
+
+    return AllocStat_FindFreeSpill(h, type);
+}

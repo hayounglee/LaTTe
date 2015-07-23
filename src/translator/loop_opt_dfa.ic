@@ -1,0 +1,633 @@
+/* loop_opt_dfa.ic
+
+   Dataflow analysis for variables and memory locations
+
+   Written by: Jinpyo Park <jp@altair.snu.ac.kr>
+
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+/*======================================================================
+   Functions 
+======================================================================*/
+static void dataflow_analysis(CFG* cfg);
+static void init_chains(void);
+static void build_ud_chain(CFG* cfg);
+static void build_du_chain(CFG* cfg);
+static void build_var_ud_chain(CFG* cfg);
+static void build_mem_ud_chain(void);
+
+inline static word* bv_map_new(void);
+inline static word* bv_map_entry(word* bv_map, int i);
+
+inline static word* instr_bv_new(void);
+inline static void  instr_bv_copy(word* dest, word* src);
+
+static void build_alias_info();
+static void init_mem_instr_array(void);
+
+inline static word* bv_mem_expr_to_instr_entry(word* bv_mem_map, int index);
+inline static word* bv_mem_expr_to_instr_new(void);
+
+inline static void enter_mem_instr(int instr_idx, int field1, int field2, Field* field, 
+                                   int value_type, word* def_instr_bv);
+
+/*====================================================================*/
+static void
+dataflow_analysis(CFG* cfg)
+/*====================================================================*/
+{
+    int i;
+    static int bv_map_shift_count_tbl [] = {
+        0, 0,       /* 0, 1 */
+        1,          /* 2 */
+        2, 2,       /* 3, 4 */
+        3, 3, 3, 3, /* 5, 6, 7, 8 */
+        4, 4, 4, 4, 4, 4, 4, 4 /* 9, 10, 11, 12, 13, 14, 15, 16 */
+    };
+    init_chains();
+
+    /* expect that the loop is reasonably
+       small (32*16=512 instrs) if we consider fast loop optimization */
+    assert(loop_instr_array_bv_size <= 16);   
+
+    i = bv_map_shift_count_tbl[loop_instr_array_bv_size];
+    bv_map_shift_count = i; /* now the size of a bv of a ud/du chain is 
+                               1<<bv_map_shift_count */
+    bv_map_size_in_byte = CFG_GetNumOfVars(cfg)*sizeof(word)<<i;
+    bv_map_entry_size = 1<<i;
+
+    build_ud_chain(cfg);
+    build_du_chain(cfg);
+}
+
+/*====================================================================*/
+static void
+init_chains(void)
+/*======================================================================
+  initialize bit vectors for ud, du chains
+======================================================================*/
+{
+    word*       bit_vector_chunk;
+    int         bit_vector_chunk_size, i;
+
+    loop_instr_array_bv_size = (loop_instr_array_size+31)/32;
+    bit_vector_chunk_size = 
+        loop_instr_array_bv_size * loop_instr_array_size * 2;
+    bit_vector_chunk = (word*)FMA_calloc(sizeof(word) * bit_vector_chunk_size);
+    for (i=0; i<loop_instr_array_size; i++) {
+        loop_instr_array[i].ud_chain = bit_vector_chunk;
+        bit_vector_chunk += loop_instr_array_bv_size;
+        loop_instr_array[i].du_chain = bit_vector_chunk;
+        bit_vector_chunk += loop_instr_array_bv_size;
+    }
+}
+
+/*====================================================================*/
+static void
+build_du_chain(CFG* cfg)
+/*======================================================================
+  Build du chain from the precomputed ud chains.
+======================================================================*/
+{
+    register int i, j;
+    word* cur_ud_chain;
+    for (i=0; i<loop_instr_array_size; i++) {
+        cur_ud_chain = loop_instr_array[i].ud_chain;
+        FORWARD_SCAN_BV(j, cur_ud_chain, loop_instr_array_size, -1) {
+            BV_SetBit(loop_instr_array[j].du_chain, i);
+        }
+    }
+}
+
+/*====================================================================*/
+static void
+build_ud_chain(CFG* cfg)
+/*======================================================================
+  Build ud chain for both register variables and memory locations.
+======================================================================*/
+{
+    build_var_ud_chain(cfg);
+    init_mem_instr_array(); /* This call came here because the func uses ud_chain. */
+    if (number_of_stores > 0 && number_of_loads > 0) {
+        build_alias_info();
+        build_mem_ud_chain();
+    }
+}
+
+/*====================================================================*/
+static void
+build_var_ud_chain(CFG* cfg)
+/*======================================================================
+  build ud chain by forward scanning the instructions
+
+  We use branch instruction to represent the liveness outside the loop.
+  For example, a variable X is used by an exit branch if it is live
+  along the exit path. 
+======================================================================*/
+{
+    int         i, j, src_reg, src_reg_num, dst_reg, dst_reg_num, live_vars_size;
+    InstrNode*  instr;
+    word*       bv_map;
+    word*       live_vars_bv;
+
+    live_vars_size = CFG_GetNumOfVars(cfg);
+    /* The first round with the imprecise data. */
+    bv_map = bv_map_new();
+    for (i=loop_instr_array_size-1; i>=0; i--) {
+        instr = loop_instr_array[i].instr;
+        /* Clear the map entry if this is the last use of src_reg. */
+        for (j=0; j<Instr_GetNumOfSrcRegs(instr); j++) {
+            src_reg = Instr_GetSrcReg(instr, j);
+            if (Var_IsVariable(src_reg) && Instr_IsLastUse(instr, src_reg)) {
+                src_reg_num = CFG_get_var_number(src_reg);
+                BV_Init(bv_map_entry(bv_map, src_reg_num), loop_instr_array_bv_size);    
+            }
+        }
+        /* Clear and set the map entry of destination var. */ 
+        if (Var_IsVariable(dst_reg = Instr_GetDestReg(instr, 0))) {
+            dst_reg_num = CFG_get_var_number(dst_reg);
+            BV_Init(bv_map_entry(bv_map, dst_reg_num), loop_instr_array_bv_size);
+            BV_SetBit(bv_map_entry(bv_map, dst_reg_num), i);
+        } 
+    }
+    
+    /* The second round with the precise data. */
+    for (i=loop_instr_array_size-1; i>=0; i--) {
+        instr = loop_instr_array[i].instr;
+        /* Set outside liveness at the branch. */
+        if (Instr_IsBranch(instr)) {
+            int exit_path;
+            assert(loop_instr_array[i].successor_num == 0 ||
+                   loop_instr_array[i].successor_num == 1);
+            exit_path = (loop_instr_array[i].successor_num == 0) ? 1 : 0;
+            /* FIXME: Are you sure the exit successor of instr still has a 
+               precise live information? I examined that CSE inserts an 
+               instruction as a new exit successor which has too conservative
+               live information compared to the original successor. */
+            live_vars_bv = Instr_GetLive(Instr_GetSucc(instr, exit_path));
+            /* If you run with -noregionopt, it is possible that the live
+               information is set appropriately. In such cases assume a
+               conservative live information. */
+            if (!live_vars_bv) {    
+                for (j=0; j<live_vars_size; j++) {
+                    BV_OR(loop_instr_array[i].ud_chain, bv_map_entry(bv_map, j),
+                          loop_instr_array_bv_size);
+                }
+            } else {
+                FORWARD_SCAN_BV(j, live_vars_bv, live_vars_size, -1) {
+                    BV_OR(loop_instr_array[i].ud_chain,
+                          bv_map_entry(bv_map, j), loop_instr_array_bv_size);
+                }
+            }
+        }
+        /* Mark the use in the map. */                           
+        for (j=0; j<Instr_GetNumOfSrcRegs(instr); j++) {
+            src_reg = Instr_GetSrcReg(instr, j);
+            if (Var_IsVariable(src_reg)) {
+                src_reg_num = CFG_get_var_number(src_reg);
+                BV_OR(loop_instr_array[i].ud_chain, 
+                      bv_map_entry(bv_map, src_reg_num), 
+                      loop_instr_array_bv_size);
+            }
+        }
+        /* Clear the map entry because this is the last use of src_reg. */
+        for (j=0; j<Instr_GetNumOfSrcRegs(instr); j++) {
+            if (Var_IsVariable(src_reg = Instr_GetSrcReg(instr, j))) {
+                src_reg_num = CFG_get_var_number(src_reg);
+                if (Instr_IsLastUse(instr, src_reg)) {
+                    BV_Init(bv_map_entry(bv_map, src_reg_num), loop_instr_array_bv_size); 
+                }
+            }
+        }
+        /* Clear and set the map entry of destination var. */         
+        if (Var_IsVariable(dst_reg = Instr_GetDestReg(instr, 0))) {
+            dst_reg_num = CFG_get_var_number(dst_reg);
+            BV_Init(bv_map_entry(bv_map, dst_reg_num), loop_instr_array_bv_size);
+            BV_SetBit(bv_map_entry(bv_map, dst_reg_num), i);
+        } 
+    }
+}
+
+/*====================================================================*/
+inline static 
+word*
+bv_map_new(void)
+/*====================================================================*/
+{
+    word* new_map = (word*)FMA_calloc(bv_map_size_in_byte);
+    return new_map;
+}
+
+/*====================================================================*/
+inline static 
+word*
+bv_map_entry(word* bv_map, int i)
+/*======================================================================
+  return the pointer of the entry of the i-th variable of bv_map
+======================================================================*/
+{
+    return &bv_map[i<<bv_map_shift_count];
+}
+
+/*====================================================================*/
+static void
+init_mem_instr_array(void)
+/*====================================================================*/
+{
+    int i, field1, field2;
+    word* def_instr_bv;
+    InstrNode*  instr;
+
+    /* A bold assumption that memory instructions will not
+       be more than half of entire instructions */
+    int max_num_mem_instr = ((loop_instr_array_size>>1) + 1);
+    mem_instr_array = (MemInstr*)FMA_calloc(sizeof(MemInstr) * max_num_mem_instr);
+    mem_instr_array_size = 0;
+    number_of_stores = number_of_loads = 0;
+
+    /* initialize memory expr hash */
+    mem_expr_hash_table = (MemExpr*)FMA_calloc(sizeof(MemExpr) * max_num_mem_instr);
+    mem_expr_hash_table_size = max_num_mem_instr;
+    mem_expr_hash_table_bv_size = (mem_expr_hash_table_size+31)/32;
+
+    /* initialize hash table iterator */
+    mem_expr_hash_table_iterator = (MemExpr**)FMA_calloc(sizeof(MemExpr*) * max_num_mem_instr);
+    mem_expr_hash_table_iterator_size = 0;
+
+    /* Extract the memory expression and enter it into the hash table. 
+       Care must be taken to find the original definition of the address   
+       variable of the memory location. That's why registers are accessed
+       via "get_org_src_reg" here. */
+    def_instr_bv = instr_bv_new();
+    for (i=0; i<loop_instr_array_size; i++) {
+        instr = loop_instr_array[i].instr;
+        loop_instr_array[i].mem_instr_array_index = -1;
+
+        if (Instr_IsLoad(instr)) {
+            bzero(def_instr_bv, loop_instr_array_bv_size*sizeof(word));
+            /* FORMAT_4 - load with no immediate */
+            if (instr->format == FORMAT_4) { 
+                DBG( Instr_PrintToStdout(instr); );
+                field1 = get_org_src_reg(i, 0, def_instr_bv);
+                field2 = get_org_src_reg(i, 1, def_instr_bv);
+                if (field1 != -1 && field2 != -1) {
+                    /* both fields must have unique source registers */
+                    /* Immediate value is of 13bits in its magnitude.
+                       So, it will not coincide into the register number.
+                       In addition, field1 must not be 0 since 0 in field1
+                       is a mark for an empty hash bucket. */
+                    assert(!IS_SIMM13(field2) && field1 != 0);
+                    enter_mem_instr(i, field1, field2, Instr_GetFieldInfo(instr),
+                                    Var_GetType(Instr_GetDestReg(instr, 0)), def_instr_bv);
+                    number_of_loads++;
+                }
+            } 
+            /* FORMAT_5 - load with immediate offset */            
+            else if (instr->format == FORMAT_5) {
+                DBG( Instr_PrintToStdout(instr); );
+                field1 = get_org_src_reg(i, 0, def_instr_bv);
+                if (field1 != -1) {
+                    field2 = instr->fields.format_5.simm13;
+                    assert( IS_SIMM13(field2) && field1 != 0 );
+                    enter_mem_instr(i, field1, field2, Instr_GetFieldInfo(instr),
+                                    Var_GetType(Instr_GetDestReg(instr, 0)), def_instr_bv);
+                    number_of_loads++;
+                }
+            } else {    /* Every load belongs to FORMAT_4 or FORMAT_5 */
+                assert(0 && "Unknown format for load instruction");
+            }
+        } 
+        else if (Instr_IsStore(instr)) {
+            bzero(def_instr_bv, loop_instr_array_bv_size*sizeof(word));
+            /* FORMAT_7 - store with no immediate */            
+            if (instr->format == FORMAT_7) { 
+                DBG( Instr_PrintToStdout(instr); );
+                field1 = get_org_src_reg(i, 0, def_instr_bv);
+                field2 = get_org_src_reg(i, 1, def_instr_bv);
+                if (field1 != -1 && field2 != -1) {
+                    assert( !IS_SIMM13(field2) && field1 != 0 );
+                    enter_mem_instr(i, field1, field2,  Instr_GetFieldInfo(instr),
+                                    Var_GetType(Instr_GetSrcReg(instr, 2)), def_instr_bv);
+                    number_of_stores++;
+                }
+            } 
+            /* FORMAT_8 - store with immediate offset */
+            else if (instr->format == FORMAT_8) { 
+                DBG( Instr_PrintToStdout(instr); );
+                field1 = get_org_src_reg(i, 0, def_instr_bv);
+                if (field1 != -1) {
+                    field2 = instr->fields.format_8.simm13;
+                    assert( IS_SIMM13(field2) && field1 != 0 );
+                    enter_mem_instr(i, field1, field2, Instr_GetFieldInfo(instr),
+                                    Var_GetType(Instr_GetSrcReg(instr, 1)), def_instr_bv);
+                    number_of_stores++;
+                }
+            } else {
+                assert(0 && "Unknown format for store instruction");
+            }
+        }
+    }
+    
+    mem_expr_hash_table_iterator_bv_size = (mem_expr_hash_table_iterator_size + 31) / 32;
+    assert(mem_instr_array_size <= max_num_mem_instr);
+}
+
+/*====================================================================*/
+inline static 
+bool
+check_alias(MemExpr* mem1, MemExpr* mem2)
+/*======================================================================
+  return true if mem1 may/must alias mem2.
+======================================================================*/
+{
+    if (mem1->value_type != mem2->value_type) return false;
+    /* Both are with immediates - compare immediates */
+    if (!Var_IsVariable(mem1->field2) && !Var_IsVariable(mem2->field2)) {
+        if (mem1->field2 == mem2->field2 && mem1->field && mem2->field) {
+            /* Same offset, so compare the reference. Use field name for
+               the comparison. */
+            return equalUtf8Consts(mem1->field->name, mem2->field->name);
+        } else {
+            /* Different offset */
+            return false;
+        }
+    } 
+    /* Only one of them is immediate - they must not alias. */
+    else if (!Var_IsVariable(mem1->field2) || !Var_IsVariable(mem2->field2)) {
+        return false;
+    } 
+    /* Both are with no immediate - they alias conservatively. */
+    else {
+        return true;
+    }
+}
+
+/*====================================================================*/
+static void
+build_alias_info()
+/*====================================================================*/
+{
+    register int i, j;
+    word* alias_mem_expr_bv_chunk;
+    /* chunk allocation */
+    alias_mem_expr_bv_chunk = 
+        (word*)FMA_calloc(sizeof(word) * mem_expr_hash_table_iterator_bv_size *
+                          mem_expr_hash_table_iterator_size);
+    /* initialize alias bit vector */   
+    alias_mem_expr_bv_chunk += (mem_expr_hash_table_iterator_size-1) * 
+        mem_expr_hash_table_iterator_bv_size;
+
+    for (i=mem_expr_hash_table_iterator_size-1; i>=0; i--) {
+        MemExpr* mem_expr1 = mem_expr_hash_table_iterator[i];
+        assert(mem_expr1->field1 != 0);
+
+        /* distribute each element in the chunk */
+        mem_expr1->alias_mem_expr_bv = alias_mem_expr_bv_chunk;
+        alias_mem_expr_bv_chunk -= mem_expr_hash_table_iterator_bv_size;
+        
+        /* Mark self-alias */
+        BV_SetBit(mem_expr1->alias_mem_expr_bv, i);
+
+        for (j=i+1; j<mem_expr_hash_table_iterator_size; j++) {
+            MemExpr* mem_expr2 = mem_expr_hash_table_iterator[j];
+            if (check_alias(mem_expr1, mem_expr2)) {
+                BV_SetBit(mem_expr1->alias_mem_expr_bv, j);
+                BV_SetBit(mem_expr2->alias_mem_expr_bv, i);
+            }    
+        }
+    }
+}
+
+/*====================================================================*/
+static void
+build_mem_ud_chain(void)
+/*======================================================================
+   Build ud chain of memory values according to the alias information.
+======================================================================*/
+{
+    int i, j, instr_idx, iterator_idx;
+    register InstrNode* instr;
+    word* bv_mem_map;
+    MemExpr*    mem_expr;
+    /* The first round with the imprecise initial bv_map. */
+    bv_mem_map = bv_mem_expr_to_instr_new();
+    for (i=mem_instr_array_size-1; i>=0; i--) {
+        instr_idx = mem_instr_array[i].instr_idx;
+        instr = loop_instr_array[instr_idx].instr;
+        if (Instr_IsStore(instr)) {
+            iterator_idx = mem_instr_array[i].iterator_idx;
+            mem_expr = mem_expr_hash_table_iterator[iterator_idx];
+            /* kill the "must" information */
+            BV_Init(bv_mem_expr_to_instr_entry(bv_mem_map, iterator_idx), 
+                    loop_instr_array_bv_size);
+            /* mark the use in the map */
+            FORWARD_SCAN_BV(j, mem_expr->alias_mem_expr_bv, mem_expr_hash_table_iterator_size, -1) 
+            {
+                BV_SetBit(bv_mem_expr_to_instr_entry(bv_mem_map, j), instr_idx);
+            }
+        }            
+    }
+    /* The second round with the precise bv_map. */
+    for (i=mem_instr_array_size-1; i>=0; i--) {
+        instr_idx = mem_instr_array[i].instr_idx;
+        instr = loop_instr_array[instr_idx].instr;
+        iterator_idx = mem_instr_array[i].iterator_idx;
+        if (Instr_IsLoad(instr)) {
+            /* set the ud chain information. Note that we set it by "OR" operation */
+            BV_OR(loop_instr_array[instr_idx].ud_chain,
+                  bv_mem_expr_to_instr_entry(bv_mem_map, iterator_idx),
+                  loop_instr_array_bv_size);
+        } else {
+            assert(Instr_IsStore(instr));
+            mem_expr = mem_expr_hash_table_iterator[iterator_idx];
+            /* kill the "must" information */
+            BV_Init(bv_mem_expr_to_instr_entry(bv_mem_map, iterator_idx), 
+                    loop_instr_array_bv_size);
+            /* mark the use in the map */
+            FORWARD_SCAN_BV(j, mem_expr->alias_mem_expr_bv, mem_expr_hash_table_iterator_size, -1) 
+            {
+                BV_SetBit(bv_mem_expr_to_instr_entry(bv_mem_map, j), instr_idx);
+            }
+        }
+    }
+}
+
+/*====================================================================*/
+inline static 
+int 
+mem_expr_hash_val(int field1, int field2)
+/*======================================================================
+  return the hash value of the memory expression, "field1+field2"
+======================================================================*/
+{
+    return (((unsigned)(field1 + field2)) % mem_expr_hash_table_size);
+}
+
+/*====================================================================*/
+int
+mem_expr_hash_find(int field1, int field2)
+/*======================================================================
+  find the hash entry and return the index in the hash table
+======================================================================*/
+{
+    int hash_val = mem_expr_hash_val(field1, field2);
+    
+    while (mem_expr_hash_table[hash_val].field1 != 0 &&
+           (mem_expr_hash_table[hash_val].field1 != field1 ||
+            mem_expr_hash_table[hash_val].field2 != field2)) 
+    {
+        hash_val++;
+        hash_val %= mem_expr_hash_table_size;
+    }   
+    if (mem_expr_hash_table[hash_val].field1 == 0) return -1;
+
+    return hash_val;
+}
+ 
+/*====================================================================*/
+static int
+mem_expr_hash_enter(int field1, int field2, Field* field, int value_type)
+/*======================================================================
+  Enter the expression.
+  Additionally, mem_expr_hash_table_iterator is updated here.
+  returns the index in the iterator 
+
+  value_type indicates the type of value to be stored in this memory
+  location. It is represented as T_INT, T_FLOAT, and so on. You have to
+  set this field to T_INVALID if type conflict occurs (i.e. type 
+  conversion through memory).
+======================================================================*/
+{
+    int hash_val, iterator_idx;
+
+    hash_val = mem_expr_hash_val(field1, field2);
+
+    while (mem_expr_hash_table[hash_val].field1 != 0 &&
+           (mem_expr_hash_table[hash_val].field1 != field1 ||
+            mem_expr_hash_table[hash_val].field2 != field2)) 
+    {
+        hash_val++;
+        hash_val %= mem_expr_hash_table_size;
+    }   
+    if (mem_expr_hash_table[hash_val].field1 == 0) {
+        /* new entry */
+        mem_expr_hash_table[hash_val].field1 = field1;
+        mem_expr_hash_table[hash_val].field2 = field2;
+        mem_expr_hash_table[hash_val].field = field;
+        mem_expr_hash_table[hash_val].value_type = value_type;
+        mem_expr_hash_table[hash_val].iterator_idx = 
+            mem_expr_hash_table_iterator_size;
+        mem_expr_hash_table[hash_val].cmvar = 0;
+        /* insert in the iterator */
+        iterator_idx = mem_expr_hash_table_iterator_size;
+        mem_expr_hash_table_iterator[mem_expr_hash_table_iterator_size++] 
+            = &mem_expr_hash_table[hash_val];
+    } else {
+        if (mem_expr_hash_table[hash_val].value_type != value_type) 
+            /* Set the type to T_INVALID if the type conflicts. */
+        {   
+            mem_expr_hash_table[hash_val].value_type = T_INVALID;
+        }
+        /* get the iterator index to this entry */
+        iterator_idx = mem_expr_hash_table[hash_val].iterator_idx;
+    }
+    return iterator_idx;
+}
+
+/*====================================================================*/
+inline static 
+void
+enter_mem_instr(int instr_idx, int field1, int field2, Field* field,
+                int value_type, word* def_instr_bv)
+/*====================================================================*/
+{
+    int iterator_idx = mem_expr_hash_enter(field1, field2, field, value_type);
+    
+    if (iterator_idx != -1) {
+        /* No type conflict in this memory location. */
+        loop_instr_array[instr_idx].mem_instr_array_index 
+            = mem_instr_array_size;
+        mem_instr_array[mem_instr_array_size].instr_idx = instr_idx;
+        mem_instr_array[mem_instr_array_size].addr_def_instr_bv = instr_bv_new();
+        instr_bv_copy(mem_instr_array[mem_instr_array_size].addr_def_instr_bv,
+                      def_instr_bv);
+        mem_instr_array[mem_instr_array_size++].iterator_idx = iterator_idx;
+    }
+}
+
+/*====================================================================*/
+inline static 
+word*
+instr_bv_new()
+/*======================================================================
+  initialize a bitvector for instructions in the loop
+======================================================================*/
+{
+    return (word*)FMA_calloc(sizeof(word) * loop_instr_array_bv_size);
+}
+
+/*====================================================================*/
+inline static 
+void 
+instr_bv_copy(word* dest, word* src)
+/*======================================================================
+  copy the bitvector for instructions
+======================================================================*/
+{
+    BV_Copy(dest, src, loop_instr_array_bv_size);
+}
+
+/*====================================================================*/
+inline static 
+word*
+bv_mem_expr_to_instr_new()
+/*======================================================================
+  Initialize a bit matrix which shows relationship between 
+  memory expression and loop instructions.
+======================================================================*/
+{
+    return (word*)FMA_calloc(sizeof(word) * 
+                             mem_expr_hash_table_iterator_size *
+                             loop_instr_array_bv_size);
+}
+
+/*====================================================================*/
+inline static 
+word*
+bv_mem_expr_to_instr_entry(word* bv_mem_map, int index)
+/*======================================================================
+   Get the loop instruction bitvector for the index-th memory expression.
+======================================================================*/
+{
+    return (bv_mem_map + (index * loop_instr_array_bv_size));
+}
+
+/*====================================================================*/
+inline static
+bool
+is_aliasing_mem_expr(MemExpr* mem_expr)
+/*======================================================================
+  Check if the memory location aliases with any other locations
+======================================================================*/
+{
+    bool    is_alias = false;
+    if (mem_expr->alias_mem_expr_bv) {
+        int j, cur_iterator_idx = mem_expr->iterator_idx;
+        /* Temporarily clear the self-alias bit. */
+        BV_ClearBit(mem_expr->alias_mem_expr_bv, cur_iterator_idx);
+        for (j=0; j<mem_expr_hash_table_iterator_bv_size; j++) {
+            if (mem_expr->alias_mem_expr_bv[j] != 0) {
+                is_alias = true;
+                break;
+            }
+        }
+        /* Recover the self-alias bit. */
+        BV_SetBit(mem_expr->alias_mem_expr_bv, cur_iterator_idx);
+    }
+    return is_alias;
+}
+        

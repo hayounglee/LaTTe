@@ -1,0 +1,86 @@
+/* -*- mode: C -*-
+   plist.ic
+   
+   Pointer List implementation inline functions
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+#include <assert.h>
+
+INLINE
+PList *
+PList_GetNext(PList *l)
+{
+    assert(l);
+    return l->next;
+}
+
+INLINE
+void *
+PList_GetValue(PList *l)
+{
+    assert(l);
+    return l->data;
+}
+
+INLINE
+void
+PList_SetNext(PList *l, PList *n)
+{
+    assert(l);
+    l->next = n;
+}
+
+INLINE
+void
+PList_SetValue(PList *l, void *p) {
+    assert(l);
+    l->data = p;
+}
+
+INLINE
+PList*
+PList_alloc(void *p, PList *next)
+{
+    PList *list = (PList *) gc_malloc_fixed(sizeof(PList));
+
+    PList_SetValue(list, p);
+    PList_SetNext(list, next);
+
+    return list;
+}
+
+INLINE
+void
+PList_free(PList *l)
+{
+    while(l) {
+        PList *t = PList_GetNext(l);
+        gc_free(l);
+        l = t;
+    }
+}
+
+INLINE
+bool
+PList_find(PList *l, void *p)
+{
+    for(; l != NULL; l = PList_GetNext(l)) {
+        if (PList_GetValue(l) == p) {
+            return true;
+        }
+    }
+    return false;
+}
+
+INLINE
+PList *
+PList_insert(PList *l, void *p)
+{
+    return PList_alloc(p, l);
+}

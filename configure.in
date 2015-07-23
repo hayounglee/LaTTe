@@ -1,0 +1,390 @@
+dnl Process this file with autoconf to produce a configure script.
+
+AC_INIT(src/runtime/classMethod.c)
+
+dnl ----------------------------------------------------------------------
+dnl Set strings
+
+NAME=latte
+VERSION=0.9.0
+
+AC_SUBST(NAME)
+AC_SUBST(VERSION)
+
+AC_DEFINE_UNQUOTED(VMVERSION, "$VERSION")
+
+dnl ----------------------------------------------------------------------
+dnl Default flags
+
+AC_SUBST(EXTRA_CFLAGS)
+AC_SUBST(EXTRA_OBJECTS)
+
+EXTRA_CFLAGS=-Wall
+EXTRA_OBJECTS=
+
+dnl ----------------------------------------------------------------------
+dnl Default settings for dynamic library loading
+
+vm_use_dynamic=yes
+
+dnl ----------------------------------------------------------------------
+dnl Default settings for execution engine
+
+vm_use_interpreter=no
+vm_use_translator=yes
+vm_use_simulator=no
+
+vm_use_inline_cache=yes
+vm_use_type_analysis=yes
+vm_use_customization=yes
+
+dnl ----------------------------------------------------------------------
+dnl Check host type
+
+AC_CANONICAL_SYSTEM
+AC_ARG_PROGRAM
+
+
+if test $target_cpu \!= "sparc"; then
+    AC_MSG_ERROR(LaTTe works only on UltraSPARC machines)
+fi
+
+vm_use_64_bit_integer_register=no
+
+changequote(<<, >>)dnl
+case $target_os in
+    solaris2.[678]*)
+                vm_use_64_bit_integer_register=yes
+                ;;
+    solaris2*)  ;;
+    *)          AC_MSG_WARN(LaTTe has only been tested on Solaris 2.x)
+esac;
+changequote([, ])dnl
+
+if test $vm_use_64_bit_integer_register = "yes"; then
+    AC_DEFINE(USE_64_BIT_INTEGER_REGISTER)
+fi
+
+if test `uname -m` \!= "sun4u"; then
+    AC_MSG_ERROR(LaTTe works only on UltraSPARC machines)
+fi
+
+dnl ----------------------------------------------------------------------
+dnl Check for programs
+
+AC_PROG_CC
+AC_PROG_INSTALL
+AC_PROG_RANLIB
+
+AC_CHECK_PROG(AS, as, as)
+AC_CHECK_PROG(GASP, gasp, gasp)
+AC_CHECK_PROG(AR, ar, ar cr)
+AC_CHECK_PROG(LD, ld, ld)
+AC_CHECK_PROGS(MKDIR, mkdirs 'mkdir -p' mkdir, mkdir)
+
+dnl ----------------------------------------------------------------------
+dnl Select execution engine
+
+AC_ARG_ENABLE(interpreter,
+[  --enable-interpreter    Enable interpreter],
+vm_use_interpreter=$enable_interpreter)
+
+AC_ARG_ENABLE(translator,
+[  --enable-translator     Enable translator (default)],
+vm_use_translator=$enable_translator)
+
+# VLaTTe is always disabled currently.  The source is out of date, and
+# it probably won't be included in the public source distribution.
+#
+#AC_ARG_ENABLE(simulator,
+#[  --enable-simulator      Simulate VLIW execution],
+#vm_use_simulator=$enable_simulator)
+
+if test $vm_use_translator = "no" -a $vm_use_interpreter = "no"; then
+    AC_MSG_ERROR(Either the translator or interpreter or both must be enabled)
+fi
+
+if test $vm_use_translator = "no" -a $vm_use_simulator = "yes"; then
+    AC_MSG_ERROR(Translator must be enabled to simulate VLIW execution)
+fi
+
+if test $vm_use_simulator = "yes"; then
+    NAME=vlatte
+fi
+
+AC_SUBST_FILE(intrp_frag)
+AC_SUBST_FILE(jit_frag)
+AC_SUBST_FILE(kaffejit_frag)
+AC_SUBST_FILE(sim_frag)
+
+kaffejit_frag=/dev/null
+
+AC_MSG_CHECKING(for interpreter)
+if test $vm_use_interpreter = "no"; then
+    intrp_frag=/dev/null
+    AC_MSG_RESULT(no)
+else
+    AC_DEFINE(INTERPRETER)
+    intrp_frag=$srcdir/src/interpreter/Make.frag
+    AC_MSG_RESULT(yes)
+fi
+
+AC_MSG_CHECKING(for translator)
+if test $vm_use_translator = "no"; then
+    jit_frag=/dev/null
+    AC_MSG_RESULT(no)
+else
+    AC_DEFINE(TRANSLATOR)
+    jit_frag=$srcdir/src/translator/Make.frag
+    if test $vm_use_interpreter = "no"; then
+        kaffejit_frag=$srcdir/src/kaffejit/Make.frag
+    fi
+    AC_MSG_RESULT(yes)
+fi
+
+AC_MSG_CHECKING(for VLIW simulator)
+if test $vm_use_simulator = "no"; then
+    sim_frag=/dev/null
+    AC_MSG_RESULT(no)
+else
+    AC_DEFINE(SIMULATOR)
+    sim_frag=$srcdir/src/simulator/Make.frag
+    AC_MSG_RESULT(yes)
+fi
+
+AC_MSG_CHECKING(for VM name)
+AC_DEFINE_UNQUOTED(VMNAME, "$NAME")
+AC_MSG_RESULT($NAME)
+
+dnl ----------------------------------------------------------------------
+dnl Check types
+
+AC_CHECK_SIZEOF(short,0)
+AC_CHECK_SIZEOF(int,0)
+AC_CHECK_SIZEOF(long,0)
+AC_CHECK_SIZEOF(long long,0)
+AC_CHECK_SIZEOF(__int64,0)
+AC_CHECK_SIZEOF(void*,0)
+
+AC_TYPE_SIGNAL
+AC_TYPE_SIZE_T
+AC_CHECK_TYPE(ssize_t,int)
+
+dnl ----------------------------------------------------------------------
+dnl Check for libraries
+
+AC_CHECK_LIB(c, printf, STD_LIB="$STD_LIB -lc")
+AC_CHECK_LIB(m, sin, STD_LIB="$STD_LIB -lm")
+AC_CHECK_LIB(dl, dlopen, DL_LIB="$DL_LIB -ldl")
+AC_CHECK_LIB(nsl, dial, NET_LIB="$NET_LIB -lnsl")
+AC_CHECK_LIB(socket, socket, NET_LIB="$NET_LIB -lsocket")
+AC_CHECK_LIB(z, zlibVersion, AC_DEFINE(HAVE_LIBZ) Z_LIB="-lz")
+
+LIBS="$NET_LIB $STD_LIB $DL_LIB $Z_LIB"
+
+dnl ----------------------------------------------------------------------
+dnl Check for headers
+
+AC_HEADER_STDC
+AC_HEADER_DIRENT
+AC_HEADER_SYS_WAIT
+AC_CHECK_HEADERS(fcntl.h sys/time.h unistd.h sys/socket.h)
+AC_CHECK_HEADERS(limits.h strings.h)
+AC_CHECK_HEADERS(dlfcn.h sys/ioctl.h sys/filio.h malloc.h alloca.h)
+AC_CHECK_HEADERS(sys/param.h sys/utsname.h pwd.h asm/sigcontext.h)
+AC_CHECK_HEADERS(sigcontext.h asm/signal.h signal.h mach-o/rld.h)
+AC_CHECK_HEADERS(sys/types.h sys/stat.h string.h sys/select.h memory.h)
+AC_CHECK_HEADERS(bsd/libc.h dl.h features.h zlib.h)
+
+dnl ----------------------------------------------------------------------
+dnl Check for compiler characteristics
+
+AC_C_BIGENDIAN
+AC_C_CHAR_UNSIGNED
+AC_C_CONST
+AC_C_INLINE
+AC_TYPE_OFF_T
+AC_TYPE_SIZE_T
+AC_HEADER_TIME
+AC_STRUCT_TM
+
+dnl ----------------------------------------------------------------------
+dnl Check for functions
+
+AC_FUNC_ALLOCA
+AC_PROG_GCC_TRADITIONAL
+AC_FUNC_MEMCMP
+AC_FUNC_STRFTIME
+AC_FUNC_MMAP
+AC_TYPE_SIGNAL
+AC_FUNC_VPRINTF
+AC_CHECK_FUNCS(select socket getsockname)
+AC_CHECK_FUNCS(memcpy memmove)
+AC_CHECK_FUNCS(mkdir rmdir)
+AC_CHECK_FUNCS(getcwd getwd gettimeofday ftime uname getuid)
+AC_CHECK_FUNCS(remainder remainderf fmod drem rint floor ceil)
+AC_CHECK_FUNCS(finite isinf isnan strtod strdup)
+AC_CHECK_FUNCS(strerror hstrerror)
+AC_CHECK_FUNCS(fcntl ioctl)
+AC_CHECK_FUNCS(alarm setitimer)
+AC_CHECK_FUNCS(sigprocmask sigsetmask sigemptyset sigaddset signal sigaction)
+AC_CHECK_FUNCS(waitpid kill fork execve)
+AC_CHECK_FUNCS(dlopen dlerror)
+AC_CHECK_FUNCS(gethostname strtol)
+
+dnl ----------------------------------------------------------------------
+dnl Settings for the execution engine
+
+AC_ARG_ENABLE(inline-cache,
+[  --enable-inline-cache   Use inline cache in method calls (default)],
+vm_use_inline_cache=$enable_inline_cache)
+
+AC_ARG_ENABLE(type-analysis,
+[  --enable-type-analysis  Enable type analysis (default)],
+vm_use_type_analysis=$enable_type_analysis)
+
+AC_ARG_ENABLE(customization,
+[  --enable-customization  Enable customization (default)],
+vm_use_customization=$enable_customization)
+
+AC_MSG_CHECKING(for customization)
+if test $vm_use_customization = "yes" -a $vm_use_translator = "yes"; then
+    AC_DEFINE(CUSTOMIZATION)
+    EXTRA_OBJECTS="$EXTRA_OBJECTS SpecializedMethod.o"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for inline cache)
+if test $vm_use_inline_cache = "yes" -a $vm_use_translator = "yes"; then
+    AC_DEFINE(INLINE_CACHE)
+    AC_DEFINE(USE_CALL_SITE_INFO)
+    EXTRA_OBJECTS="$EXTRA_OBJECTS TypeChecker.o CallSiteInfo.o"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for type analysis)
+if test $vm_use_type_analysis = "yes" -a $vm_use_translator = "yes"; then
+    AC_DEFINE(TYPE_ANALYSIS)
+    EXTRA_OBJECTS="$EXTRA_OBJECTS TypeAnalysis.o"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
+dnl ----------------------------------------------------------------------
+dnl Developer's settings
+
+use_debug=no
+use_gprof=no
+use_call_profile=no
+use_bytecode_prof=no
+
+AC_ARG_ENABLE(debug,
+[  --enable-debug          Turn on debugging code],
+use_debug=$enable_debug)
+
+AC_ARG_ENABLE(gprof,
+[  --enable-gprof          Add support for profiling with gprof],
+use_gprof=$enable_gprof)
+
+AC_ARG_ENABLE(call-profile,
+[  --enable-call-profile   Turn on call profiling],
+use_call_profile=$enable_call_profile)
+
+AC_ARG_ENABLE(bytecode-prof,
+[  --enable-bytecode-prof  Turn on bytecode profiling],
+use_bytecode_prof=$enable_bytecode_prof)
+
+AC_MSG_CHECKING(for debugging code)
+if test $use_debug = "yes"; then
+    CFLAGS="-g"
+    if test $vm_use_interpreter = "yes"; then
+        EXTRA_OBJECTS="$EXTRA_OBJECTS intrp-debug.o"
+    fi
+    AC_MSG_RESULT(yes)
+else
+    CFLAGS="-O3"
+    EXTRA_CFLAGS="$EXTRA_CFLAGS -DNDEBUG"
+    AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for profiling code with gprof)
+if test $use_gprof = "yes"; then
+    EXTRA_CFLAGS="$EXTRA_CFLAGS -pg"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for virtual call profiling code)
+if test $use_call_profile = "yes" -a $vm_use_translator = "yes"; then
+    AC_DEFINE(VIRTUAL_PROFILE)
+    EXTRA_OBJECTS="$EXTRA_OBJECTS virtual_call_profile.o"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for bytecode profiling code)
+if test $use_bytecode_prof = "yes" -a $vm_use_translator = "yes"; then
+    AC_DEFINE(BYTECODE_PROFILE)
+    EXTRA_OBJECTS="$EXTRA_OBJECTS bytecode_profile.o"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
+dnl ----------------------------------------------------------------------
+dnl Set dynamic loading
+
+AC_ARG_ENABLE(dynamic,
+[  --enable-dynamic        Enable dynamic loading (default)],
+vm_use_dynamic=$enable_dynamic)
+
+AC_SUBST(LIBEXT)
+AC_SUBST(PIC)
+AC_SUBST(LLIBS)
+AC_SUBST(LINKVMLIB)
+
+AC_MSG_CHECKING(for dynamic linking)
+if test $vm_use_dynamic = "no"; then
+    LIBEXT=".a"
+    AC_DEFINE(NO_SHARED_LIBRARIES)
+    PIC=
+    LLIBS="-l${NAME}_core -L../lib/core"
+    LLIBS="$LLIBS -l${NAME}_net -L../lib/net"
+    LLIBS="$LLIBS -l${NAME}_zip -L../lib/zip"
+    LLIBS="$LLIBS -l${NAME}_agent -L../lib/agent"
+    LLIBS="$LLIBS $NET_LIB $STD_LIB $Z_LIB"
+    LINKVMLIB='$(AR) $(LIB) $(OBJECTS); $(RANLIB) $(LIB)'
+    AC_MSG_RESULT(no)
+else
+    LIBEXT=".so"
+    PIC=-fPIC
+    LLIBS="$NET_LIB $STD_LIB $DL_LIB $Z_LIB"
+    LINKVMLIB='$(LD) -G -o $(LIB) $(OBJECTS)'
+    AC_MSG_RESULT(yes)
+fi
+
+AC_MSG_CHECKING(for library suffix)
+AC_DEFINE_UNQUOTED(LIBRARYSUFFIX, "$LIBEXT")
+AC_MSG_RESULT($LIBEXT)
+
+dnl ----------------------------------------------------------------------
+dnl Create files
+
+AC_CONFIG_HEADER(src/config.h)
+
+AC_OUTPUT(Makefile \
+doc/Makefile \
+lib/Makefile \
+lib/core/Makefile \
+lib/net/Makefile \
+lib/agent/Makefile \
+lib/zip/Makefile \
+include/Makefile \
+src/Makefile)

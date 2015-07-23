@@ -1,0 +1,93 @@
+/* -*- mode: C -*-
+   exception.ic
+   
+   Some inline functions related exception structure
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+#include <assert.h>
+
+/* Name        : JE_*
+   Description : accessors of jexception structure
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+uint32
+JE_GetLength(jexception *this) 
+{
+    assert(this != NULL);
+    return this->length;
+}
+
+INLINE
+jexceptionEntry *
+JE_GetEntry(jexception *this, int i) 
+{
+    assert(this != NULL);
+    return &(this->entry[i]);
+}
+
+/* Name        : JEE_*
+   Description : accessors of jexceptionEntry structure
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+uintp
+JEE_GetStartPC(jexceptionEntry *this) 
+{
+    assert(this != NULL);
+    return this->start_pc;
+}
+
+INLINE
+uintp
+JEE_GetEndPC(jexceptionEntry *this) 
+{
+    assert(this != NULL);
+    return this->end_pc;
+}
+
+INLINE
+uintp
+JEE_GetHandlerPC(jexceptionEntry *this) 
+{
+    assert(this != NULL);
+    return this->handler_pc;
+}
+
+INLINE
+constIndex
+JEE_GetCatchIDX(jexceptionEntry *this) 
+{
+    assert(this != NULL);
+    return this->catch_idx;
+}
+
+INLINE
+struct Hjava_lang_Class *
+JEE_GetCatchType(jexceptionEntry *this) 
+{
+    assert(this != NULL);
+    return this->catch_type;
+}
+
+INLINE
+void
+JEE_SetCatchType(jexceptionEntry *this, struct Hjava_lang_Class *type) 
+{
+    assert(this != NULL);
+    this->catch_type = type;
+}

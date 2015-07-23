@@ -1,0 +1,172 @@
+.\"  latte.1
+.\"   
+.\"    Manual pages for LaTTe
+.\"  
+.\"    Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+.\"  
+.\"    Copyright (C) 1999 MASS Lab., Seoul, Korea.
+.\"  
+.\"    See the file LICENSE for usage and redistribution terms and a
+.\"    disclaimer of all warranties. */
+.TH latte 1 "August 1999" "LaTTe Java Virtual Machine" "Unix manuals"
+.SH NAME
+latte \- a virtual machine which can execute Java bytecode
+.SH SYNOPSIS
+.B "latte"
+.B "[\-help]"
+.B "[\-version]"
+.B "[\-ss \fIsize\fB]"
+.B "[\-mx \fIsize\fB]"
+.B "[\-ms \fIsize\fB]"
+.B "[\-classpath \fIpath\fB]"
+.B "[\-D\fIproperty\fB=\fIvalue\fB]"
+.B "[\-verbosegc]"
+.B "[\-verboseloader]"
+.B "[\-verbosejit]"
+.B "[\-verbosetime]"
+.B "[\-vtm]"
+.B "[\-vcm]"
+.B "[\-vtime]"
+.B "[\-vvcg]"
+.B "[\-vasm]"
+.B "[\-vexception]"
+.B "[\-vtrstats]"
+.B "[\-nocse]"
+.B "[\-noloopopt]"
+.B "[\-nocustom]"
+.B "[\-noinlining]"
+.B "[\-adapt]"
+.B "[\-count \fIc\fB]"
+.B "[\-nointrp]"
+.I "class"
+.SH DESCRIPTION
+.B LaTTe
+executes Java classes.  It uses a just-in-time (JIT) compiler to
+translate Java bytecode to native code on the fly.
+.SH OPTIONS
+.TP
+.B "\-help"
+Print terse explanations for each runtime option.
+.TP
+.B "\-version"
+Print version number.
+.TP
+.B "\-ss \fIsize\fB"
+Set the maximum native stack size to \fIsize\fR.
+.TP
+.B "\-mx \fIsize\fB"
+Set the maximum heap size to \fI size\fR.  This does not include the
+memory used by the translator.
+.TP
+.B "\-ms \fIsize\fB"
+Set the initial heap size to \fI size\fR.
+.TP
+.B "\-classpath \fIpath\fB"
+Set the class path to \fIpath\fR, which is a colon-separated list of
+locations to search for classes.
+.TP
+.B "\-D\fIproperty\fB=\fIvalue\fB"
+Set \fIproperty\fR to \fIvalue\fR.
+.TP
+.B "\-verbosegc"
+Print garbage collection statistics to standard error.
+.TP
+.B "\-verboseloader"
+Print message when loading classes.
+.TP
+.B "\-verbosejit"
+Print message during JIT code generation.
+.TP
+.B "\-verbosetime"
+Print garbage collection and translation time.
+.TP
+.B "\-vtm"
+Print translated methods.
+.TP
+.B "\-vcm"
+Print called methods.
+.TP
+.B "\-vvcg"
+Print a 
+.I vcg 
+file for each method.
+.TP
+.B "\-vexception"
+Print the exceptions that are generated.
+.TP
+.B "\-vtrstats"
+Print translation statistics.
+.TP
+.B "\-Obase"
+Translate methods with no optimizations.
+.TP
+.B "\-Oopt"
+Translate methods with optimizations.
+.TP
+.B "\-Oadapt"
+Adaptively retranslate methods based on method run counts.  All
+optimizations are used when retranslating.
+.TP
+.B "\-adapt"
+Adaptively retranslate methods based on method run counts.
+.TP
+.B "\-count \fIc\fB"
+Retranslate after method runs 
+.I c 
+times.  Only useful when method run count based retranslation is
+turned on.
+.TP
+.B "\-nointrp"
+Don't use interpreter for the initial execution of methods.  Only
+available when interpreter is included.
+.TP
+.B "\-nocse"
+Do not do commom subexpression elimination.
+.TP
+.B "\-noloopopt"
+Do not do loop invariant code motion.
+.TP
+.B "\-nocustom"
+Do not do customization of methods based on receiving object types.
+.TP
+.B "\-nospecial"
+Do not do specialization of methods based on argument types.
+.TP
+.B "\-noinlining"
+Do not do any method inlining.
+
+.SH NOTE
+Java is a registered trademark of Sun Microsystems, Inc.
+
+LaTTe is available from the web site at
+.RI <http://latte.snu.ac.kr/>
+
+There is also a mailing list for LaTTe:
+.TP
+.I latte@pallas.snu.ac.kr
+General discussions about LaTTe
+.LP
+
+To subscribe to this list, send a message containing the word
+"subscribe" to
+.IR latte\-request@pallas.snu.ac.kr
+
+.SH BUGS
+Refer to the TODO list included in the source distribution.
+
+.SH AUTHORS
+The following has done major work on the LaTTe virtual machine.
+
+Byung-Sun Yang 
+
+Seongbae Park 
+
+SeungIl Lee 
+
+Junpyo Lee
+
+Jinpyo Park
+
+Suhyun Kim
+
+Yoo C. Chung

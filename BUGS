@@ -1,0 +1,110 @@
+Bugs in the native library
+==========================
+
+Too many unimplemented methods to list, among them reflection,
+serialization, and large integer arithmetic methods.
+
+
+Bugs in the runtime
+===================
+
+Does not detect stack overflows.  The only practical way to do this is
+to check for stack overflows at each method invocation, which is
+extremely detrimental to performance.  This is mainly because Java
+methods use the native calling convention for the calling convention,
+precluding the use of mprotect() and signal handlers.  The reason for
+this is that on the SPARC, when using read only pages to detect stack
+overflow, the trap detecting the overflow occurs when register windows
+are saved to a read only page, then the trap tries to save the
+register windows again, which raises a trap again, which is not
+caught.  At least this is what is thought to be preventing mprotect()
+and signal handlers from being able to catch stack overflows.  If
+traps don't save register windows, then the SAVE instruction done when
+entering the signal handler would be the cause, so it might be a
+worthwhile attempt to use a separate entry point to the trap handler
+which switches the stack to some valid page before doing any saves.
+If even this doesn't work, we're screwed, unless someone turns up
+another solution or the calling conventions for Java methods are
+changed.
+
+Deadlocks don't behave very well.  Instead of just stopping all useful
+work, a NullPointerException could be raised because of a null pointer
+reference in the thread code.
+
+
+Bugs in the bytecode to native code translator
+==============================================
+
+The translator is unable to handle exceptions generated during
+translation.  Since it is not reentrant, and constant pool items are
+resolved eagerly, there can be severe problems if a method being
+translated refers to nonexistent items.  This is because if the
+constructor for the exception has not already been translated,
+translation starts for the constructor while the translator is still
+running, and did I mention that the translator isn't reentrant?  When
+this happens, LaTTe starts gobbling up memory like a black hole.  This
+can be solved by making the translator reentrant (this would probably
+require a rewrite of the entire translator), or to make sure that no
+exceptions with untranslated constructors are raised during
+translation.
+
+When translating subroutines, it is assumed that all subroutine exits
+are done with a RET instruction, and that no manipulation of the
+return addresses are done.  Unfortunately, the JVM specification does
+not justify this assumption, even though javac does not seem to
+produce code which breaks it, so there can be valid bytecode which
+breaks the translator.
+
+
+Bugs in the bytecode interpreter
+================================
+
+Stack overflows are not detected.  Unlike code generated from the
+translator, the interpreter uses a stack separate from the native
+stack, so the obvious mprotect() along with signal handlers approach
+should work.
+
+
+Compatibility problems
+======================
+
+Constant pool resolution is done eagerly with the JIT compiler.  (This
+problem does not exist with the interpreter.)  Either explicit code
+for resolving the constant pool should be inserted into the translated
+code, or lazy resolution should be emulated.  Emulation would be done
+by using a separate resolving interface from the normal resolution
+mechanism, so that exceptions do not arise (if the translator were
+reentrant, a separate interface would not be necessary).  If something
+is not resolvable, or if resolution would require side effects
+(e.g. the loading of a class with a static initializer), stub code
+would be inserted instead, which resolves the item at run-time.  The
+stub code should be self-modifying code which replaces the stub code
+with normal code after the first execution.
+
+Access permission checks are not done when the translator is built.
+(They are done when only the interpreter is built.)  This is to avoid
+the problems the translator has with exceptions.
+
+Instantiation errors, e.g. creating instances for interfaces or
+abstract classes, are not checked for.
+
+The Java compiler included with at least one version of the Sun JDK
+class library does not work because an IllegalAccessError occurs (this
+occurs only in the pure interpreter version of LaTTe, since otherwise
+access permission checks are not done).  However, this error arose
+because sun.tools.javac.SourceClass accessed a protected member of
+sun.tools.java.FieldDefinition, and SourceClass is not a subclass of
+FieldDefinition.  It simply isn't *supposed* to work!  (In fact, in
+JDK 1.1.6 and JDK 1.2fcs, the compilers fails verification.)
+
+Various non-conforming class loading semantics (erroneous classes
+aren't labeled as erroneous, newInstance() works for unresolved
+classes, etc.).
+
+The machine does not reproduce the exact numerical semantics specified
+by the JVM specification.  This would be a lot of work, detrimental to
+performance, and probably not very important in real applications,
+however.
+
+Thread.stop() only stops a thread, but it should also do a lot of
+other work (e.g. unlock all locks owned by the thread).

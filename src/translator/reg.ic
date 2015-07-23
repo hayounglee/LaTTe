@@ -1,0 +1,272 @@
+/* -*- mode: C -*-
+   reg.ic
+   
+   physical register related inline functions
+   
+   Written by: SeungIl Lee <hacker@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+#include <assert.h>
+#include <stdio.h>
+
+/* structure declaration */
+struct CFG;
+
+extern int CFG_GetNumOfStorageLocations(struct CFG *cfg);
+extern struct CFG *cfg;
+
+#define REG_INVALID -1
+
+extern int _is_available_register[];
+extern int _parameter_registers[];
+extern int _argument_registers[];
+extern char *_reg_names[];
+
+/* Name        : Reg_IsHW
+   Description : check if this is physical hardware register or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Reg_IsHW(Reg reg)
+{
+    return (unsigned) reg < (unsigned) Reg_number;
+}
+
+/* Name        : Reg_IsInteger
+   Description : check if this register is integer register or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Reg_IsInteger(Reg reg)
+{
+    return reg >= g0 && reg <= i7;
+}
+
+/* Name        : Reg_IsFloat
+   Description : check if this register is floating point register or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Reg_IsFloat(Reg reg)
+{
+    return reg >= f0 && reg <= f31;
+}
+
+/* Name        : Reg_IsRegister
+   Description : check if this register is valid register or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:
+       register includes physical hardware register and spill register
+       spill register indicates a spill area in a stack frame.  */
+INLINE
+bool
+Reg_IsRegister(Reg reg)
+{
+    assert(cfg);
+    
+    return (reg & VAR_NUM_MASK) == reg;
+//    return (unsigned) reg < (unsigned) CFG_GetNumOfStorageLocations(cfg);
+}
+
+/* Name        : Reg_IsSpill
+   Description : check if this register is spill register or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Reg_IsSpill(Reg reg)
+{
+    return Reg_IsRegister(reg) && reg >= Reg_number;
+}
+
+/* Name        : Reg_IsAvailable
+   Description : check if we can use this register or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Reg_IsAvailable(Reg reg)
+{
+    return _is_available_register[reg] || (reg >= Reg_number);
+}
+
+/* Name        : Reg_IsParameter
+   Description : check if this register can be used as parameter or not
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+bool
+Reg_IsParameter(Reg reg)
+{
+    return (reg >= o0 && reg <= o6);
+}
+
+/* Name        : Reg_get_parameter
+   Description : get parameter register
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+Reg
+Reg_get_parameter(int idx)
+{
+    if (idx < 6) return _parameter_registers[idx];
+
+    return -1;
+}
+
+/* Name        : Reg_get_argument
+   Description : get argument register
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+Reg
+Reg_get_argument(int idx)
+{
+    if (idx < 6) return _argument_registers[idx];
+
+    return -1;
+}
+
+/* Name        : Reg_GetName
+   Description : return hardware register name
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+char *
+Reg_GetName(Reg reg)
+{
+    char *_reg_name;
+    
+    assert(Reg_IsRegister(reg));
+
+    _reg_name = (char *) FMA_calloc(sizeof(char) * 10);
+
+    if (Reg_IsHW(reg)) return _reg_names[reg];
+
+    assert(Reg_IsSpill(reg));
+
+    sprintf(_reg_name, "spill%d", reg - Reg_number);
+    return _reg_name;
+}
+
+/* Name        : Reg_GetType
+   Description : check type of register
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  */
+INLINE
+RegType
+Reg_GetType(Reg reg)
+{
+    if (reg > 0 && reg <= glast) return T_INT;
+    if (reg >= f0 && reg <= flast) return T_FLOAT;
+    if (reg >= cc0 && reg <= cclast) return T_CC;
+
+    return T_INVALID;
+}
+
+/* Name        : Reg_get_returned
+   Description : get register used as return value passing
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: viewed by caller  */
+INLINE
+Reg 
+Reg_get_returned(VarType type)
+{
+    switch(type) {
+      case T_INT: case T_REF: case T_LONG:
+	return o0;
+      case T_IVOID:
+	return o1;
+      case T_FLOAT: case T_DOUBLE:
+	return f0;
+      case T_FVOID:
+	return f1;
+      default:
+	assert(false);
+    }
+
+    return -1;
+}
+
+/* Name        : Reg_get_returning
+   Description : get register used as return value passing
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes: viewed by callee  */
+INLINE
+Reg
+Reg_get_returning(VarType type)
+{
+    switch(type) {
+      case T_INT: case T_REF: case T_LONG:
+	return i0;
+      case T_IVOID:
+	return i1;
+      case T_FLOAT: case T_DOUBLE:
+	return f0;
+      case T_FVOID:
+	return f1;
+      default:
+	assert(false);
+    }
+
+    return -1;
+}
+

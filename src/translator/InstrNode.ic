@@ -1,0 +1,1216 @@
+
+
+/* -*- mode: C -*-
+
+   InstrNode.ic
+   
+   This file contains the inline functions for InstrNode.
+   
+   Written by: Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+
+INLINE
+void
+Instr_Init(InstrNode* c_instr)
+{
+   c_instr->preferredDest = -1;
+   c_instr->nativeOffset = -1;
+#ifdef JP_EXTENDED_REGION
+   c_instr->is_region_header = false;
+#endif
+}
+
+INLINE
+int
+Instr_GetNumOfPreds(InstrNode* c_instr)
+{
+    return c_instr->numOfPredecessors;
+}
+
+INLINE
+InstrNode*
+Instr_GetPred(InstrNode* c_instr, int index)
+{
+    assert(index < c_instr->numOfPredecessors);
+
+    return c_instr->predecessors[index];
+}
+
+
+///
+/// Function Name : Instr_SetPred
+/// Author : Yang, Byung-Sun
+/// Input
+///      c_instr - current instruciton
+///      index - predecessor index
+///      pred - new predecessor
+/// Output
+///      The index'th element of predecessor list of c_instr is replaced by
+///      'pred'. The old predecessor will be returned.
+/// Pre-Condition
+///      index must be less than c_instr's numOfPredecessors.
+/// Post-Condition
+/// Description
+///      This method is used at the stage 3. Finally block subroutine and main flow
+///      are connected to each other at first, and disconnected at last.
+///
+INLINE
+InstrNode*
+Instr_SetPred(InstrNode* c_instr, int index, InstrNode* pred)
+{
+    InstrNode*    old_pred;
+
+    assert(index < c_instr->numOfPredecessors);
+
+    old_pred = c_instr->predecessors[index];
+
+    c_instr->predecessors[index] = pred;
+
+    return old_pred;
+}
+
+
+INLINE
+void
+Instr_RemoveAllPreds(InstrNode* c_instr)
+{
+    c_instr->numOfPredecessors = 0;
+}
+
+INLINE
+int
+Instr_GetNumOfSuccs(InstrNode* c_instr)
+{
+    return c_instr->numOfSuccessors;
+}
+
+INLINE
+InstrNode*
+Instr_GetSucc(InstrNode* c_instr, int index)
+{
+    assert(index < c_instr->numOfSuccessors);
+
+    return c_instr->successors[index];
+}
+
+INLINE
+InstrNode*
+Instr_SetSucc(InstrNode* c_instr, int index, InstrNode* succ)
+{
+    InstrNode*   old_succ;
+
+    assert(index < c_instr->numOfSuccessors);
+
+    old_succ = c_instr->successors[index];
+    c_instr->successors[index] = succ;
+
+    return old_succ;
+}
+
+INLINE
+void
+Instr_RemoveAllSuccs(InstrNode* c_instr)
+{
+    c_instr->numOfSuccessors = 0;
+}
+
+
+INLINE
+void
+Instr_connect_instruction(InstrNode* previous_instr, InstrNode* new_instr)
+{
+    Instr_AddPred(new_instr, previous_instr);
+    Instr_AddSucc(previous_instr, new_instr);
+}
+
+INLINE
+void
+Instr_disconnect_instruction(InstrNode* first_instr, InstrNode* second_instr)
+{
+    Instr_RemoveSucc(first_instr, second_instr);
+    Instr_RemovePred(second_instr, first_instr);
+}
+
+
+INLINE
+void
+Instr_MarkVisited(InstrNode* c_instr)
+{
+    c_instr->visited++;
+}
+
+INLINE
+void
+Instr_UnmarkVisted(InstrNode* c_instr)
+{
+    c_instr->visited = 0;
+}
+
+INLINE
+bool
+Instr_IsVisited(InstrNode* c_instr)
+{
+    return c_instr->visited != 0;
+}
+
+INLINE
+int
+Instr_GetVisitedNum(InstrNode* c_instr)
+{
+    return c_instr->visited;
+}
+
+
+///
+/// Function Name : Instr_create_copy
+/// Author : Yang, Byung-Sun
+/// Input
+///      from_reg - source register
+///      to_reg - destination register
+/// Output
+///      A copy instruction is created.
+/// Pre-Condition
+///      Both 'from_reg' and 'to_reg' should be physical registers.
+/// Post-Condition
+/// Description
+///
+INLINE
+InstrNode*
+Instr_create_copy(Reg from_reg, Reg to_reg)
+{
+    InstrNode* new_instr;
+
+    assert(Reg_IsHW(from_reg) &&
+            Reg_IsHW(to_reg));
+
+
+    // create an add instruction
+    if (from_reg < f0) {		// when from_reg is an integer register
+        assert(to_reg < f0);
+        new_instr = create_format6_instruction(ADD, to_reg, from_reg, g0, -1);
+    } else {			// when from_reg is a float register
+        assert(to_reg >= f0);
+        new_instr = create_format6_instruction(FMOVS, to_reg, g0, from_reg, -1);
+    }
+
+    return new_instr;
+}
+
+
+INLINE
+InstrNode*
+Instr_create_nop()
+{
+    return create_format2_instruction(SETHI, g0, 0, -1);
+}
+
+/* 
+   Name        : Instr_create_region_dummy
+   Description :
+   Maintainer  : Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:  A dummy instruction is inserted at the head of a region
+           before register allocation. After allocation, it will be deleted.
+ */
+INLINE
+InstrNode*
+Instr_create_region_dummy()
+{
+    return create_format1_instruction( DUMMY_OP, 10, -1 );
+}
+
+INLINE
+InstrNode*
+Instr_Clone(InstrNode* c_instr)
+{
+    InstrNode*   new_instr = (InstrNode*) FMA_calloc(sizeof(InstrNode));
+    Instr_Init(new_instr);
+
+    bcopy(c_instr, new_instr, sizeof(InstrNode));
+
+    Instr_RemoveAllPreds(new_instr);
+    Instr_RemoveAllSuccs(new_instr);
+    new_instr->maxNumOfPredecessors = 0;
+    new_instr->maxNumOfSuccessors = 0;
+
+    return new_instr;
+}
+
+
+INLINE
+InstrOffset
+Instr_GetBytecodePC(InstrNode* c_instr)
+{
+    return c_instr->bytecodePC;
+}
+
+
+///
+/// Function Name : get_instr_type
+/// Author : Yang, Byung-Sun
+/// Input
+///      c_instr - current instruction
+/// Output
+///      This function returns the type of c_instr.
+/// Pre-Condition
+/// Post-Condition
+/// Description
+///      The type of an instruction node is NORMAL_INSTR or DELAY_SLOT_INSTR.
+///      This is somewhat specific to SPARC ISA.
+///      At phase 4, delay slot filling may occur.
+///      If the target of a branch is DELAY_SLOT_INSTR,
+///      it is changed to the CTI before the original target.
+///
+INLINE
+void
+Instr_SetDelayed(InstrNode* c_instr)
+{
+    c_instr->instrType |= DELAY_SLOT_INSTR;
+}
+
+
+INLINE
+bool
+Instr_IsDelayed(InstrNode* c_instr)
+{
+    return (c_instr->instrType & DELAY_SLOT_INSTR);
+}
+
+#ifdef INLINE_CACHE
+
+INLINE
+bool
+is_pinned_instr(InstrNode* c_instr)
+{
+    return (c_instr->instrType & PINNED_INSTR);
+}
+
+INLINE
+void
+set_pinned_instr(InstrNode* c_instr)
+{
+    c_instr->instrType |=  PINNED_INSTR;
+}
+
+#endif /* INLINE_CACHE */
+
+
+INLINE
+void
+Instr_SetUnresolved(InstrNode* c_instr)
+{
+    c_instr->instrType |= RESOLVE_INSTR;
+}
+
+
+INLINE
+void
+Instr_UnsetUnresolved(InstrNode* c_instr)
+{
+    c_instr->instrType &= ~RESOLVE_INSTR;
+}
+
+INLINE
+bool
+Instr_IsUnresolved(InstrNode* c_instr)
+{
+    return (c_instr->instrType & RESOLVE_INSTR);
+}
+
+INLINE
+void
+Instr_SetResolveInfo(InstrNode* c_instr, struct InstrToResolve* entry)
+{
+    c_instr->resolveEntry = entry;
+}
+
+INLINE
+struct InstrToResolve*
+Instr_GetResolveInfo(InstrNode* c_instr)
+{
+    return c_instr->resolveEntry;
+}
+
+
+///
+/// Function Name : Instr_GetNativeOffset
+/// Author : Yang, Byung-Sun
+/// Input
+///      c_instr - current instruction
+/// Output
+///      The address of the real code of c_instr is returned.
+/// Pre-Condition
+///      To get a meaningful address, this function should be called
+///      only at the stage 4.
+/// Post-Condition
+/// Description
+///      At the stage 4, a text segment is allocated for the method.
+///      The code for c_instr is then written in the segment.
+///      By this function, the real code address can be known.
+///
+INLINE
+int
+Instr_GetNativeOffset(InstrNode* c_instr)
+{
+    return c_instr->nativeOffset;
+}
+
+INLINE
+void
+Instr_SetNativeOffset(InstrNode* c_instr, int native_offset)
+{
+    c_instr->nativeOffset = native_offset;
+}
+
+
+INLINE
+int
+Instr_GetCode(InstrNode* c_instr)
+{
+    return c_instr->instrCode;
+}
+
+
+INLINE
+OpFormat
+Instr_GetFormat(InstrNode* c_instr)
+{
+    return c_instr->format;
+}
+
+INLINE
+InstrFields*
+Instr_GetFields(InstrNode* c_instr)
+{
+    return &(c_instr->fields);
+}
+
+INLINE
+Reg
+Instr_GetPreferredDest(InstrNode* c_instr)
+{
+    assert(c_instr->format != FORMAT_3 &&
+            c_instr->format != FORMAT_7 &&
+            c_instr->format != FORMAT_8);
+
+    return c_instr->preferredDest;
+}
+
+INLINE
+void
+Instr_SetPreferredDest(InstrNode*  c_instr,
+                          Reg    preferred_dest)
+{
+    assert(c_instr->format != FORMAT_3 &&
+            c_instr->format != FORMAT_7 &&
+            c_instr->format != FORMAT_8);
+
+
+    c_instr->preferredDest = preferred_dest;
+}
+
+INLINE
+bool
+Instr_IsJoin(InstrNode* c_instr)
+{
+    return (c_instr->numOfPredecessors > 1);
+}
+
+#ifdef JP_EXTENDED_REGION
+
+INLINE
+bool
+is_region_header(InstrNode* c_instr)
+{
+   return (c_instr->is_region_header);
+}
+
+#endif /* JP_EXTENDED_REGION */
+
+
+INLINE
+bool
+Instr_IsLastUse(InstrNode* c_instr, Reg reg)
+{
+//   assert(reg != 0);
+
+    if (c_instr->lastUsedRegs[0] == reg ||
+        c_instr->lastUsedRegs[1] == reg ||
+        c_instr->lastUsedRegs[2] == reg) {
+        return true;
+    }
+
+    return false;
+}
+
+INLINE
+void
+Instr_SetH(InstrNode* c_instr, void* h_map)
+{
+    c_instr->h_map = h_map;
+}
+
+INLINE
+void*
+Instr_GetH(InstrNode* c_instr)
+{
+    return c_instr->h_map;
+}
+
+INLINE
+int
+Instr_GetVN(InstrNode * c_instr) {
+
+    return c_instr->vn;
+}
+
+INLINE
+void
+Instr_SetVN(InstrNode * c_instr, int vn) {
+
+    c_instr->vn = vn;
+}
+
+
+INLINE
+void
+Instr_SetLive(InstrNode* c_instr, word* live)
+{
+    c_instr->live = live;
+}
+
+INLINE
+word*
+Instr_GetLive(InstrNode* c_instr)
+{
+    return c_instr->live;
+}
+
+INLINE
+void
+Instr_SetLoopHeader(InstrNode* c_instr)
+{
+    c_instr->properties |= INSTR_LOOP_HEADER;
+}
+
+INLINE
+bool
+Instr_IsLoopHeader(InstrNode* c_instr)
+{
+    return c_instr->properties & INSTR_LOOP_HEADER;
+}
+
+
+
+
+///
+/// Function Name : is_copy
+/// Author : Yang, Byung-Sun
+/// Input
+///      c_instr - instruction to check
+/// Output
+///      If 'c_instr' is a copy instruction, this function returns 'true'.
+/// Pre-Condition
+/// Post-Condition
+/// Description
+///      What is a 'copy'?
+///      - 'constant loading' is not a copy. e.g) add %g0, 4, %l0
+///      - To move, only 'ADD' instruction is really used.
+///      - 'ADD' in format 5 is a copy only when rs2 == 0 and rs1 != g0.
+///      - 'ADD' in format 6 is a copy only when rs1 == g0 or rs2 == g0.
+///      - 'FMOVS' is also a copy operation which is used for floating registers.
+///
+INLINE
+bool
+Instr_IsICopy(InstrNode* c_instr)
+{
+    if (c_instr->instrCode == ADD) {
+        if (c_instr->format == FORMAT_6) {
+            return (c_instr->fields.format_6.srcReg_1 == g0 ||
+                    c_instr->fields.format_6.srcReg_2 == g0);
+        } else {
+            return (c_instr->fields.format_5.srcReg != g0 &&
+                    c_instr->fields.format_5.simm13 == 0);
+        }
+    }
+    return false;
+}
+
+INLINE
+bool
+Instr_IsFCopy(InstrNode* c_instr)
+{
+    return (c_instr->instrCode == FMOVS) || (c_instr->instrCode == FMOVD);
+}
+
+INLINE
+bool
+Instr_IsRegionDummy(InstrNode* c_instr)
+{
+    return (c_instr->instrCode == DUMMY_OP && c_instr->fields.format_1.disp30 == 10);
+}
+
+INLINE
+bool
+Instr_IsRestore(InstrNode* c_instr)
+{
+    return c_instr->instrCode == RESTORE;
+}
+
+INLINE
+bool
+Instr_IsReturn(InstrNode* c_instr)
+{
+    return (c_instr->numOfSuccessors == 0 &&
+            c_instr->instrCode == JMPL && c_instr->fields.format_5.srcReg == IRET);
+}
+
+INLINE
+bool
+Instr_IsMemAccess(InstrNode* c_instr)
+{
+    return (c_instr->instrCode >> 30) == 0x3;
+}
+
+INLINE
+bool
+Instr_IsDirectCall(InstrNode* c_instr)
+{
+    return c_instr->instrCode == CALL;
+}
+
+INLINE
+bool
+Instr_IsIndirectCall(InstrNode* c_instr)
+{
+    return c_instr->instrCode == JMPL &&
+        c_instr->fields.format_6.destReg == o7;
+}
+
+INLINE
+bool
+Instr_IsCall(InstrNode* c_instr)
+{
+#ifdef TYPE_ANALYSIS
+    return ((c_instr->instrCode == CALL 
+             || c_instr->instrCode == INVOKE 
+             || (c_instr->instrCode == JMPL
+                 && (c_instr->fields.format_6.destReg == o7)))
+            && (c_instr->instrInfo != NULL));
+#else /* not TYPE_ANALYSIS */
+    return ((c_instr->instrCode == CALL ||
+             (c_instr->instrCode == JMPL &&
+              (c_instr->fields.format_6.destReg == o7)))
+            && (c_instr->instrInfo != NULL));
+#endif /* not TYPE_ANALYSIS */
+}
+
+INLINE
+bool
+Instr_IsTableJump(InstrNode* c_instr)
+{
+    return (c_instr->instrCode == JMPL &&
+            c_instr->numOfSuccessors != 0 &&
+            c_instr->fields.format_6.destReg != o7);
+}
+
+INLINE
+bool
+Instr_IsIBranch(InstrNode* c_instr)
+{
+    return (Instr_GetCode(c_instr) & MASK_BRANCH) == GROUP_IBRANCH;
+}
+
+
+INLINE
+bool
+Instr_IsFBranch(InstrNode* c_instr)
+{
+    return (Instr_GetCode(c_instr) & MASK_BRANCH) == GROUP_FBRANCH;
+}
+
+INLINE
+bool
+Instr_IsBranch(InstrNode* c_instr)
+{
+    return Instr_IsIBranch(c_instr) || Instr_IsFBranch(c_instr);
+}
+
+INLINE
+void
+Instr_PredictTaken(InstrNode* c_instr)
+{
+    assert(Instr_IsBranch(c_instr));
+
+    // c_instr->instrCode |= PREDICT_TAKEN;
+}
+
+INLINE
+void
+Instr_PredictUnTaken(InstrNode* c_instr)
+{
+    assert(Instr_IsBranch(c_instr));
+
+    // c_instr->instrCode &= ~(PREDICT_TAKEN);
+}
+
+INLINE
+bool
+Instr_IsExceptionReturn(InstrNode *c_instr)
+{
+    return (c_instr->properties & INSTR_EXCEPTION_RETURN) != 0;
+}
+
+INLINE
+void
+Instr_SetExceptionReturn(InstrNode *c_instr)
+{
+    c_instr->properties |= INSTR_EXCEPTION_RETURN;
+}
+
+INLINE
+bool
+Instr_IsTrap(InstrNode* c_instr)
+{
+    int code = Instr_GetCode(c_instr);
+    if ((code & MASK_TRAP)==GROUP_TRAP) {
+        return true;
+    } 
+
+    return false;
+}
+
+
+INLINE
+bool
+Instr_IsNop(InstrNode * c_instr) {
+    
+    return ((Instr_GetCode(c_instr) == ADD 
+             && Instr_GetDestReg(c_instr, 0) == g0) 
+            || (Instr_GetCode(c_instr) == SETHI 
+                && Instr_GetDestReg(c_instr, 0) == g0) 
+            || (Instr_IsFCopy(c_instr)
+                && Instr_GetDestReg(c_instr, 0) == g0));
+}
+
+
+INLINE
+bool
+is_isetcc(InstrNode * c_instr) {
+    int code = Instr_GetCode(c_instr);
+    
+    if ((code & MASK_ICC) == GROUP_ICC)
+      assert((code == SUBCC) || (code == ANDCC));
+    return ((code & MASK_ICC) == GROUP_ICC);
+    //&& Instr_GetDestReg(c_instr, 0) == g0);
+}
+
+INLINE
+bool
+is_fsetcc(InstrNode* c_instr) {
+    int code = Instr_GetCode(c_instr);
+
+    return (code == FCMPD||code == FCMPS);
+}
+
+INLINE
+bool
+Instr_IsSetcc(InstrNode* c_instr)
+{
+    return is_isetcc(c_instr) || is_fsetcc(c_instr);
+}
+
+INLINE
+bool
+Instr_IsLoad(InstrNode* c_instr) {
+    int opcode = Instr_GetCode(c_instr);
+
+    return (opcode == LDSB
+             || opcode == LDSH
+             || opcode == LDUB
+             || opcode == LDUH
+             || opcode == LD
+             || opcode == LDD
+             || opcode == LDF
+             || opcode == LDDF); 
+}
+
+INLINE
+bool
+Instr_IsStore(InstrNode* c_instr) {
+    return (c_instr->format == FORMAT_7 || c_instr->format == FORMAT_8);
+}
+
+INLINE
+bool
+Instr_IsCondMove(InstrNode* c_instr)
+{
+    return (Instr_GetCode(c_instr) & COND_MOVE_MASK) == GROUP_COND_MOVE;
+}
+
+
+//
+// This function is only for the delay slot filling.
+//
+INLINE
+bool
+Instr_IsSame(InstrNode* instr1, InstrNode* instr2)
+{
+    return (instr1->format == instr2->format &&
+             instr1->instrCode == instr2->instrCode &&
+             instr1->fields.format_7.srcReg_1 ==
+             instr2->fields.format_7.srcReg_1 &&
+             instr1->fields.format_7.srcReg_2 ==
+             instr2->fields.format_7.srcReg_2 &&
+             instr1->fields.format_7.srcReg_3 ==
+             instr2->fields.format_7.srcReg_3);
+}
+
+INLINE
+void
+Instr_SetAnnulling(InstrNode* c_instr)
+{
+    c_instr->instrCode |= ANNUL_BIT;
+}
+
+
+///
+/// Function Name : Instr_register_to_jump_table
+/// Author : Yang, Byung-Sun
+/// Input
+///     jump_table - jump table whose entry corresponds to the jump target
+///     c_instr - jump target instruction
+///     index - jump table index
+/// Output
+///     c_instr is registered into jump_table and it points to the corresponding
+///     jump table entry.
+/// Pre-Condition
+///     index should be less than the real size of jump_table.
+/// Post-Condition
+/// Description
+///     In case c_instr is removed or the jump target is modified as a result
+///     of some kind of optimizations, the jump table index should be modified
+///     before resolve.
+///
+INLINE
+void
+Instr_register_to_jump_table(InstrNode** jump_table, InstrNode* c_instr, int index)
+{
+    jump_table[index] = c_instr;
+}
+
+
+
+INLINE
+FuncInfo*
+FuncInfo_alloc(void)
+{
+    return (FuncInfo*)FMA_calloc(sizeof(FuncInfo));
+}
+
+INLINE
+RetInfo*
+RetInfo_alloc(void)
+{
+    return (RetInfo*)FMA_calloc(sizeof(RetInfo));
+}
+
+INLINE
+ArgInfo*
+ArgInfo_alloc(void)
+{
+    return (ArgInfo*)FMA_calloc(sizeof(ArgInfo));
+}
+
+INLINE
+void
+RetInfo_init(RetInfo* ret_info, int num_of_rets, int* ret_vars)
+{
+    int    i;
+
+    ret_info->numOfRets = num_of_rets;
+    for (i = 0; i < num_of_rets; i++) {
+        ret_info->retVars[i] = ret_vars[i];
+    }
+}
+
+INLINE
+void
+ArgInfo_init(ArgInfo* arg_info, int num_of_args, int* arg_vars)
+{
+    int    i;
+
+    arg_info->numOfArgs = num_of_args;
+    if (num_of_args > 0) {
+        arg_info->argVars = FMA_calloc(sizeof(int) * num_of_args);
+    }
+
+    for (i = 0; i < num_of_args; i++) {
+        arg_info->argVars[i] = arg_vars[i];
+    }
+}
+
+
+INLINE
+void
+Instr_SetInstrInfo(InstrNode* c_instr, void* instr_info)
+{
+    c_instr->instrInfo = instr_info;
+}
+
+INLINE
+int
+Instr_GetNumOfArgs(InstrNode* c_instr)
+{
+    assert(Instr_IsCall(c_instr));
+    if (c_instr->instrInfo == NULL) {
+        return 0;
+    }
+    return ((FuncInfo*) c_instr->instrInfo)->argInfo.numOfArgs;
+}
+
+INLINE
+int
+Instr_GetArg(InstrNode* c_instr, int index)
+{
+    assert(Instr_IsCall(c_instr));
+    assert(index < Instr_GetNumOfArgs(c_instr));
+
+    return ((FuncInfo*) c_instr->instrInfo)->argInfo.argVars[index];
+}
+
+INLINE
+int
+Instr_GetNumOfRets(InstrNode* c_instr)
+{
+    if (c_instr->instrInfo == NULL) {
+        return 0;
+    }
+
+    //
+    // FuncInfo's first field is RetInfo, which makes the casting meaningful.
+    //
+    return ((RetInfo*) c_instr->instrInfo)->numOfRets;
+}
+
+INLINE
+int
+Instr_GetRet(InstrNode* c_instr, int index)
+{
+    assert(index < Instr_GetNumOfRets(c_instr));
+
+    return ((RetInfo*) c_instr->instrInfo)->retVars[index];
+}
+
+
+INLINE
+void
+Instr_SetExceptionGeneratable(InstrNode* c_instr)
+{
+    assert(c_instr);
+    c_instr->properties |= INSTR_EXCEPTION_GENERATABLE;
+}
+
+INLINE
+bool
+Instr_IsExceptionGeneratable(InstrNode* c_instr)
+{
+    return c_instr->properties & INSTR_EXCEPTION_GENERATABLE;
+}
+
+INLINE
+void
+Instr_SetNeedMapInfo(InstrNode* c_instr)
+{
+    c_instr->properties |= NEED_MAP_INFO;
+}
+
+
+INLINE
+void
+Instr_SetNeedLocal0MapInfo(InstrNode* c_instr)
+{
+    c_instr->properties |= NEED_LOCAL0_MAP_INFO;
+}
+
+INLINE
+void
+Instr_SetNeedRetAddrInfo(InstrNode* c_instr)
+{
+    c_instr->properties |= NEED_RET_ADDR_INFO;
+}
+
+INLINE
+void
+Instr_UnsetNeedMapInfo(InstrNode* c_instr)
+{
+    c_instr->properties &= ~INSTR_NEEDMAPINFO_MASK;
+}
+
+INLINE
+void
+Instr_UnsetExceptionGeneratable(InstrNode *c_instr)
+{
+    assert(c_instr);
+    c_instr->properties &= ~INSTR_EXCEPTION_GENERATABLE;
+    Instr_UnsetNeedMapInfo(c_instr);
+}
+
+INLINE
+MapInfo
+Instr_NeedMapInfo(InstrNode* c_instr)
+{
+    return c_instr->properties & INSTR_NEEDMAPINFO_MASK;
+}
+
+
+INLINE
+int
+Instr_IsRegionEnd(InstrNode * c_instr) 
+{
+    /* If prev == NULL, it means, c_instr is a region header. */
+    assert(c_instr);
+
+    return Instr_IsJoin(c_instr);
+}
+
+INLINE
+FuncInfo*    
+Instr_GetFuncInfo(InstrNode * c_instr)
+{
+    assert(c_instr);
+    
+    return (FuncInfo*)(c_instr->instrInfo);
+}
+
+#ifdef INLINE_CACHE
+INLINE
+int          
+Instr_GetDTableIndex(InstrNode* c_instr)
+{
+    assert(c_instr->instrInfo != NULL);
+
+    return ((FuncInfo*)c_instr->instrInfo)->dtable_offset;
+}
+
+INLINE
+void
+Instr_SetStartOfInlineCache(InstrNode *c_instr)
+{
+    assert(c_instr);
+    c_instr->properties |= INSTR_INLINE_CACHE_START;
+}
+
+INLINE
+bool
+Instr_IsStartOfInlineCache(InstrNode *c_instr)
+{
+    assert(c_instr);
+    return c_instr->properties & INSTR_INLINE_CACHE_START;
+}
+    
+#endif /* INLINE_CACHE */
+
+#ifdef TYPE_ANALYSIS
+
+INLINE
+void
+Instr_SetStartOfVirtualCallSequence(InstrNode* c_instr)
+{
+    assert(c_instr);
+    c_instr->properties |= INSTR_VIRTUAL_CALL_START;
+}
+
+INLINE
+bool
+Instr_IsStartOfVirtualCallSequence(InstrNode* c_instr)
+{
+    assert(c_instr);
+    return c_instr->properties & INSTR_VIRTUAL_CALL_START;
+}
+
+INLINE
+bool
+Instr_IsStartOfInvokeSequence(InstrNode* c_instr)
+{
+    return c_instr->instrCode == INVOKE;
+}
+
+INLINE
+void
+Instr_SetMV2TV(InstrNode* c_instr, void* mv2tv)
+{
+    assert(c_instr); 
+    c_instr->mv2tv = mv2tv; 
+}
+
+INLINE
+void*
+Instr_GetMV2TV(InstrNode* c_instr)
+{
+    assert(c_instr); 
+    return c_instr->mv2tv; 
+}
+
+INLINE
+void
+Instr_SetStackOffsetOfRetVal(InstrNode* c_instr, int32 offset)
+{
+    assert(c_instr);
+    c_instr->retStackTop = offset;
+}
+
+INLINE
+int32
+Instr_GetStackOffsetOfRetVal(InstrNode* c_instr)
+{
+    assert(c_instr);
+    return c_instr->retStackTop;
+}
+
+INLINE
+void
+Instr_SetOperandStackTop(InstrNode* c_instr, int32 offset)
+{
+    assert(c_instr);
+    c_instr->operandStackTop = offset;
+}
+
+INLINE
+int32
+Instr_GetOperandStackTop(InstrNode* c_instr)
+{
+    assert(c_instr);
+    return c_instr->operandStackTop;
+}
+
+INLINE
+void
+Instr_SetInvokeType(InstrNode* c_instr, int32 type)
+{
+    assert(c_instr);
+    c_instr->invokeType = type;
+}
+
+INLINE
+int32
+Instr_GetInvokeType(InstrNode* c_instr)
+{
+    assert(c_instr);
+    return c_instr->invokeType;
+}
+
+INLINE
+Method*
+Instr_GetCalledMethod(InstrNode* c_instr)
+{
+    assert(Instr_IsStartOfInvokeSequence(c_instr));
+    return (Method*)c_instr->fields.format_1.disp30;
+}
+
+
+#endif /* TYPE_ANALYSIS */
+
+INLINE
+void
+Instr_SetVolatile(InstrNode *c_instr)
+{
+    assert(c_instr);
+    c_instr->properties |= INSTR_VOLATILE;
+}
+
+INLINE
+bool
+Instr_IsVolatile(InstrNode *c_instr)
+{
+    assert(c_instr);
+    return c_instr->properties & INSTR_VOLATILE;
+}
+
+INLINE
+void
+Instr_SetFieldInfo(InstrNode* c_instr, Field* field)
+{
+    assert(c_instr &&
+           (c_instr->format == FORMAT_4 || c_instr->format == FORMAT_5 ||
+            c_instr->format == FORMAT_7 || c_instr->format == FORMAT_8));
+#ifdef __GNUC__
+    c_instr->field[0] = field;
+#else
+    c_instr->field = field;
+#endif  //__GNUC__
+}
+
+INLINE
+Field*
+Instr_GetFieldInfo(InstrNode* c_instr)
+{
+    assert(c_instr &&
+           (c_instr->format == FORMAT_4 || c_instr->format == FORMAT_5 ||
+            c_instr->format == FORMAT_7 || c_instr->format == FORMAT_8));
+#ifdef __GNUC__
+    return c_instr->field[0];
+#else
+    return c_instr->field;
+#endif  //__GNUC__
+}
+        
+INLINE
+void
+Instr_SwitchToNop(InstrNode* c_instr)
+{
+    assert(c_instr);
+    c_instr->format = FORMAT_2;
+    c_instr->instrCode = SETHI;
+    c_instr->fields.format_2.destReg = g0;
+    c_instr->fields.format_2.imm22 = 0;
+
+    Instr_UnsetUnresolved(c_instr);
+    c_instr->instrInfo = NULL;
+}
+
+
+
+
+INLINE
+struct InlineGraph *
+Instr_GetInlineGraph(InstrNode *c_instr) {
+    assert(c_instr != NULL);
+
+    return c_instr->graph;
+}
+
+INLINE
+void
+Instr_SetInlineGraph(InstrNode *c_instr, struct InlineGraph *graph) {
+    assert(c_instr != NULL);
+
+    c_instr->graph = graph;
+}
+
+
+INLINE
+void
+Instr_PrintToStdout(InstrNode* instr)
+{
+    Instr_Print(instr, stdout, '\n');
+    fflush(stdout);
+}
+
+INLINE
+bool
+Instr_IsIInc(InstrNode* instr)
+{
+    assert(instr);
+    return (instr->instrCode == ADD &&
+            instr->fields.format_5.srcReg && instr->fields.format_5.destReg);
+}

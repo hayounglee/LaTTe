@@ -1,0 +1,32 @@
+# Native portion of the class library
+#
+# Copyright (C) 1999 MASS Lab, Seoul National University
+#
+# See the file LICENSE for usage and redistribution terms and a
+# disclaimer of all warranties.
+#
+# Written by Yoo C. Chung <chungyc@altair.snu.ac.kr>
+
+srcdir	= @srcdir@
+
+subdirs	= core net zip agent
+
+all:
+	@for i in $(subdirs); do (cd $$i; $(MAKE) all) || exit 1; done
+
+install:
+	@for i in $(subdirs); do (cd $$i; $(MAKE) install) || exit 1; done
+
+clean:
+	@for i in $(subdirs); do (cd $$i; $(MAKE) clean) || exit 1; done
+
+distclean:
+	@for i in $(subdirs); do (cd $$i; $(MAKE) distclean) || exit 1; done
+	rm -f Makefile
+
+depend:
+	@for i in $(subdirs); do (cd $$i; $(MAKE) depend) || exit 1; done
+
+TAGS:
+
+.PHONY: all install clean distclean depend TAGS

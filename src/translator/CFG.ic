@@ -1,0 +1,984 @@
+/* -*- mode: C -*-
+   CFG.ic
+   
+   This file contains the inline functions to manipulate CFG structure.
+   
+   Written by: Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+#define DBG(s)
+
+//
+// for LocalVariableInfo structure
+//
+
+///
+/// Function Name : insert_lv_info
+/// Author : Yang, Byung-Sun
+/// Input
+///       list_header - pointer to linked list header of local variable information
+///       new_lv_info - new local variable info structure to insert
+/// Output
+///       'new_lv_info' is inserted at the head of the list and 'list_header' is
+///       set to point to this.
+/// Pre-Condition
+/// Post-Condition
+/// Description
+///
+INLINE
+void
+insert_lv_info(LocalVariableInfo** list_header, LocalVariableInfo* new_lv_info)
+{
+    new_lv_info->next = *list_header;
+    *list_header = new_lv_info;
+}
+
+
+INLINE
+void
+LVI_init(LocalVariableInfo* lv_info)
+{
+    lv_info->next = NULL;
+    lv_info->localVariable = 0;
+    lv_info->allocatedRegister = 0;
+}
+
+INLINE
+void
+LVI_set_lv_register(LocalVariableInfo* lv_info, Reg lv_reg)
+{
+    lv_info->localVariable = lv_reg;
+}
+
+INLINE
+Reg
+LVI_get_lv_register(LocalVariableInfo* lv_info)
+{
+    return lv_info->localVariable;
+}
+
+INLINE
+void
+LVI_set_physical_register(LocalVariableInfo* lv_info, Reg phy_reg)
+{
+    lv_info->allocatedRegister = phy_reg;
+}
+
+INLINE
+Reg
+LVI_get_physical_register(LocalVariableInfo* lv_info)
+{
+    return lv_info->allocatedRegister;
+}
+
+
+
+//
+// for FinallyBlockInfo structure
+//
+
+INLINE
+void
+FBI_init(FinallyBlockInfo* fb_info)
+{
+    fb_info->header = NULL;
+    fb_info->GOSUB_List = NULL;
+    fb_info->operandStackTop = -2;
+}
+
+INLINE
+void
+FBI_SetHeader(FinallyBlockInfo* fb_info, InstrNode* header)
+{
+    fb_info->header = header;
+}
+
+INLINE
+InstrNode*
+FBI_GetHeader(FinallyBlockInfo* fb_info)
+{
+    return fb_info->header;
+}
+
+INLINE
+InstrOffset
+FBI_get_first_pc(FinallyBlockInfo* fb_info)
+{
+    return fb_info->headerPC;
+}
+
+
+INLINE
+void
+FBI_set_operand_stack_top_at_start(FinallyBlockInfo* fb_info,
+                                   int               operand_stack_top)
+{
+    if (fb_info->operandStackTop < -1) {
+        fb_info->operandStackTop = operand_stack_top;
+    } else {
+        assert(fb_info->operandStackTop == operand_stack_top);
+    }
+}
+
+INLINE
+int
+FBI_get_operand_stack_top_at_start(FinallyBlockInfo* fb_info)
+{
+    return fb_info->operandStackTop;
+}
+
+INLINE
+void
+FBI_add_GOSUB(FinallyBlockInfo* fb_info, InstrNode* gosub)
+{
+    fb_info->GOSUB_List = ilist_insert(fb_info->GOSUB_List, (int) gosub);
+}
+
+INLINE
+ilist*
+FBI_get_GOSUB_list_iterator(FinallyBlockInfo* fb_info)
+{
+    return fb_info->GOSUB_List;
+}
+
+INLINE
+void
+FBI_set_last_FB_instruction(FinallyBlockInfo* fb_info,
+                            InstrNode*        last_instr)
+{
+    fb_info->lastInstr = last_instr;
+}
+
+INLINE
+InstrNode*
+FBI_get_last_FB_instruction(FinallyBlockInfo* fb_info)
+{
+    return fb_info->lastInstr;
+}
+
+
+
+//
+// for InstrToResolve structure
+//
+
+///
+/// Function Name : create_resolve_instr_entry
+/// Author : Yang, Byung-Sun
+/// Input
+///      instr - instruction to resolve
+///      resolve_data - data in the instruction to resolve
+/// Output
+///      A new InstrToResolve entry is created.
+/// Pre-Condition
+///      The fast memory allocation system must be active.
+///      This function is called at the stage 2 and 3.
+/// Post-Condition
+/// Description
+///      'call' - dest = PC + disp30 << 2
+///      branch instructions - dest = PC + 4 * sign_ext(disp22)
+///      memory operations - sethi and ld/st/or/jmpl
+///      spilled operations - 'ld/st rd, [%fp - xxx]'
+///      'save' - 'save %sp, -xxx, %sp'
+///
+///      To resolve 'save', the stack size in the CFG is used.
+///
+INLINE
+InstrToResolve*
+create_resolve_instr_entry(InstrNode*  instr,
+                           void*       resolve_data)
+{
+    InstrToResolve*   new_entry =
+        (InstrToResolve*) FMA_allocate(sizeof(InstrToResolve));
+
+    new_entry->instr = instr;
+    new_entry->dataToResolve = resolve_data;
+    new_entry->instrCode = Instr_GetCode(instr);
+
+    Instr_SetResolveInfo(instr, new_entry);
+
+    return new_entry;
+}
+
+INLINE
+InstrNode*
+get_resolve_instr(InstrToResolve* instr_entry)
+{
+    return instr_entry->instr;
+}
+
+INLINE
+void*
+get_resolve_data(InstrToResolve* instr_entry)
+{
+    return instr_entry->dataToResolve;
+}
+
+INLINE
+int
+get_resolve_instr_name(InstrToResolve* instr_entry)
+{
+    return instr_entry->instrCode;
+}
+
+
+
+//
+// struct DataEntry
+//
+
+///
+/// Function Name : create_data_entry
+/// Author : Yang, Byung-Sun
+/// Input
+///      type - data type, either NORMAL or JUMP_TABLE
+///      offset - offset of data from the data segment
+///      size - size of data in bytes
+///      initial_value - initial value of data
+/// Output
+///      A new data entry is created.
+/// Pre-Condition
+///      'offset' should be aligned by 4.
+///      The fast memory allocation system should be active.
+/// Post-Condition
+/// Description
+///      With this entry, the data segment of a method is initialized
+///      at the stage 4.
+///      Jump tables are in data segment, so 'initial_value' are pointers
+///      to InstrNodes.
+///
+INLINE
+DataEntry*
+create_data_entry(DataType type, int offset, int size, void* initial_value)
+{
+    DataEntry*   new_entry = (DataEntry*) FMA_allocate(sizeof(DataEntry));
+
+    new_entry->type = type;
+    new_entry->offset = offset;
+    new_entry->size = size;
+    new_entry->initialValue = initial_value;
+
+    return new_entry;
+}
+
+INLINE
+DataType
+get_data_type(DataEntry* data_entry)
+{
+    return data_entry->type;
+}
+
+INLINE
+int
+get_data_offset(DataEntry* data_entry)
+{
+    return data_entry->offset;
+}
+
+INLINE
+int
+get_data_size(DataEntry* data_entry)
+{
+    return data_entry->size;
+}
+
+INLINE
+void*
+get_initial_value(DataEntry* data_entry)
+{
+    return data_entry->initialValue;
+}
+
+
+//
+// for control flow graph, CFG
+//
+
+INLINE
+void
+CFG_DeregisterInstr(CFG* cfg, InstrNode* c_instr)
+{
+    assert(cfg);
+    assert(c_instr);
+    assert(c_instr->arrayIndex >= 0);
+    assert(c_instr->arrayIndex < cfg->maxSizeOfList);
+
+    cfg->instrList[c_instr->arrayIndex] = NULL;
+    cfg->numOfNodes--;
+
+    if (Instr_NeedMapInfo(c_instr)) cfg->numOfMapNeedInstrs--;
+}
+
+INLINE
+void
+CFG_ExpandTextSegByOneWord(CFG* cfg)
+{
+    cfg->textSize += 4;
+}
+
+INLINE
+int
+CFG_GetNumOfParameters(CFG* cfg)
+{
+    return cfg->numOfParams;
+}
+
+INLINE
+int
+CFG_GetParameter(CFG* cfg, int index)
+{
+    assert(cfg->numOfParams > index);
+
+    return cfg->paramVars[index];
+}
+
+INLINE
+ReturnType
+CFG_GetRetType(CFG* cfg)
+{
+    return cfg->retType;
+}
+
+INLINE
+int
+CFG_GetNumOfLocalVars(CFG *cfg) 
+{
+    return cfg->numberOfLocalVariables;
+}
+
+INLINE
+void
+CFG_SetNumOfLocalVars(CFG *cfg, int n) 
+{
+    cfg->numberOfLocalVariables = n;
+}
+
+INLINE
+int
+CFG_GetNumOfStackVars(CFG *cfg) 
+{
+    return cfg->numberOfStackVariables;
+}
+
+INLINE
+void
+CFG_SetNumOfStackVars(CFG *cfg, int n) 
+{
+    cfg->numberOfStackVariables = n;
+}
+
+INLINE
+int
+CFG_GetNumOfTempVars(CFG *cfg) 
+{
+    return cfg->numberOfTemporaryVariables;
+}
+
+INLINE
+void
+CFG_SetNumOfTempVars(CFG *cfg, int n) 
+{
+    cfg->numberOfTemporaryVariables = n;
+}
+
+INLINE
+int
+CFG_GetNumOfVars(CFG *cfg) 
+{
+    return cfg->numberOfLocalVariables
+        + cfg->numberOfStackVariables 
+        + cfg->numberOfTemporaryVariables;
+}
+
+INLINE
+int
+CFG_GetNumOfSpillRegs(CFG *cfg) 
+{
+    return CFG_GetNumOfVars(cfg);
+}
+
+INLINE
+int
+CFG_GetNumOfStorageLocations(CFG *cfg) 
+{
+    return Reg_number + CFG_GetNumOfVars(cfg);
+}
+
+INLINE
+int
+CFG_GetNumOfInstrs(CFG* cfg)
+{
+    return cfg->numOfNodes;
+}
+
+INLINE
+InstrNode *
+CFG_GetRoot(CFG* cfg)
+{
+    return cfg->root;
+}
+
+INLINE
+void
+CFG_SetRoot(CFG* cfg, InstrNode* instr)
+{
+    cfg->root = instr;
+}
+
+#define DEFAULT_MAX_INSTR_NUMBER 1000
+
+INLINE
+CFG *
+CFG_Init(struct InlineGraph *IG_root) 
+{
+    CFG *cfg = FMA_calloc(sizeof(CFG));
+
+    cfg->graphRoot = IG_root;
+
+    cfg->maxNumOfArgs = 6;
+
+    cfg->instrList = (InstrNode **) FMA_calloc(sizeof(InstrNode *) * 
+                                               DEFAULT_MAX_INSTR_NUMBER);
+    cfg->maxSizeOfList = DEFAULT_MAX_INSTR_NUMBER;
+
+    return cfg;
+}
+
+INLINE
+struct InlineGraph *
+CFG_get_IG_root(CFG *cfg) 
+{
+    assert(cfg != NULL);
+    
+    return cfg->graphRoot;
+}
+
+INLINE
+int
+CFG_GetTextSegSize(CFG* cfg)
+{
+    return cfg->textSize;
+}
+
+INLINE
+void
+CFG_SetTextSegSize(CFG* cfg , int size)
+{
+    cfg->textSize = size;
+}
+
+INLINE
+int
+CFG_GetDataSegSize(CFG* cfg)
+{
+    return cfg->dataSize;
+}
+
+INLINE
+int
+CFG_GetStackSize(CFG* cfg)
+{
+    return cfg->stackSize;
+}
+
+///
+/// Function Name : CFG_SetStackSize
+/// Author : Yang, Byung-Sun
+/// Input
+///      cfg - control flow graph which corresponds to the method
+///      size - stack size
+/// Output
+/// Pre-Condition
+///      stack size should be greater than or equal to 112.
+/// Post-Condition
+/// Description
+///      The stack size can be known after the spill registers are determined.
+///      The stack layout is the same as that of gcc.
+///
+INLINE
+void
+CFG_SetStackSize(CFG* cfg, int size)
+{
+    cfg->stackSize = size;
+}
+
+INLINE
+int
+CFG_GetNumOfFinallyBlocks(CFG* cfg)
+{
+    return cfg->numOfFinallyBlocks;
+}
+
+INLINE
+void
+add_new_resolve_instr(CFG* cfg, InstrNode* c_instr, void* resolve_data)
+{
+    InstrToResolve*    new_entry;
+
+    new_entry = create_resolve_instr_entry(c_instr, resolve_data);
+    new_entry->next = cfg->resolveInstrList;
+    cfg->resolveInstrList = new_entry;
+
+    Instr_SetUnresolved(c_instr);
+}
+
+INLINE
+InstrToResolve*
+get_resolve_instr_list_iterator(CFG* cfg)
+{
+    return cfg->resolveInstrList;
+}
+
+INLINE
+int
+CFG_AddNewDataEntry(CFG*     cfg,
+                    DataType type,
+                    int      size,
+                    void*    initial_value,
+                    int      alignment)
+{
+    int        offset;
+    DataEntry* new_entry;
+
+    offset = (cfg->dataSize + alignment) & -alignment;
+    cfg->dataSize = offset + size;
+
+    new_entry = create_data_entry(type, offset, size, initial_value);
+    new_entry->next = cfg->dataList;
+    cfg->dataList = new_entry;
+
+    return offset;
+}
+
+INLINE
+DataEntry*
+CFG_GetDataListIterator(CFG* cfg)
+{
+    return cfg->dataList;
+}
+
+
+///
+/// Function Name : CFG_PrepareTraversal
+/// Author : Yang, Byung-Sun
+/// Input
+///       cfg - control flow graph to traverse
+/// Output
+///       The 'visited' fields of all instructions in cfg are unmarked.
+/// Pre-Condition
+///       'cfg' maintains the list of instructions
+/// Post-Condition
+/// Description
+///
+INLINE
+void
+CFG_PrepareTraversal(CFG* cfg)
+{
+    InstrNode**    instr_list = cfg->instrList;
+    int    i;
+
+    for (i = 0; i < cfg->sizeOfList ; i++) {
+        if (instr_list[i] != NULL) {
+            Instr_UnmarkVisted(instr_list[i]);
+        }	   
+    }
+}
+
+#ifdef TYPE_ANALYSIS
+INLINE
+void
+CFG_PrepareTraversalFromStart(CFG* cfg, int start)
+{
+    InstrNode**    instr_list = cfg->instrList;
+    int    i;
+
+    for (i = start; i < cfg->sizeOfList ; i++) {
+        if (instr_list[i] != NULL) {
+            Instr_UnmarkVisted(instr_list[i]);
+        }	   
+    }
+}
+
+INLINE
+int
+CFG_GetSizeOfList(CFG* cfg)
+{
+    assert(cfg);
+    return cfg->sizeOfList;
+}
+
+INLINE
+void
+CFG_NullifyMV2TV(CFG* cfg)
+{
+    InstrNode**    instr_list = cfg->instrList;
+    int    i;
+
+    for (i = 0; i < cfg->sizeOfList ; i++) {
+        if (instr_list[i] != NULL) {
+            Instr_SetMV2TV(instr_list[i], NULL);
+        }	   
+    }
+}
+#endif
+
+
+///
+/// Function Name : register_format1_instruction
+/// Author : Yang, Byung-Sun
+/// Input
+///      cfg - control flow graph where a new instruction will be registered
+///      p_instr - previous instruciton
+///      bytecode_pc - bytecode offset which corresponds to the new instruction
+///      instr_code - instruction code
+///      disp30 - displacement whose size is 30 bits
+/// Output
+///      A new instruction is created and this instruction is registered to cfg.
+///      The pointer to the new instruction is returned.
+/// Pre-Condition
+/// Post-Condition
+/// Description
+///      This function is a wrapper of create_format1_instruction.
+///
+INLINE
+InstrNode*
+register_format1_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code,
+                             int         disp30)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format1_instruction(instr_code,
+                                           disp30,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format2_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code,
+                             Reg     dest_reg,
+                             int         imm22)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format2_instruction(instr_code,
+                                           dest_reg,
+                                           imm22,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format3_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format3_instruction(instr_code, bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format4_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code,
+                             Reg     dest_reg,
+                             Reg     src_reg_1,
+                             Reg     src_reg_2)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format4_instruction(instr_code,
+                                           dest_reg,
+                                           src_reg_1,
+                                           src_reg_2,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format5_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code,
+                             Reg     dest_reg,
+                             Reg     src_reg,
+                             short       simm13)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format5_instruction(instr_code,
+                                           dest_reg,
+                                           src_reg,
+                                           simm13,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format6_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code,
+                             Reg     dest_reg,
+                             Reg     src_reg_1,
+                             Reg     src_reg_2)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format6_instruction(instr_code,
+                                           dest_reg,
+                                           src_reg_1,
+                                           src_reg_2,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format7_instruction(CFG*         cfg,
+                             InstrNode*   p_instr,
+                             InstrOffset  bytecode_pc,
+                             int          instr_code,
+                             Reg     src_reg_3,
+                             Reg     src_reg_1,
+                             Reg     src_reg_2)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format7_instruction(instr_code,
+                                           src_reg_3,
+                                           src_reg_1,
+                                           src_reg_2,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format8_instruction(CFG*         cfg,
+                             InstrNode*   p_instr,
+                             InstrOffset  bytecode_pc,
+                             int          instr_code,
+                             Reg     src_reg_2,
+                             Reg     src_reg_1,
+                             short        simm13)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format8_instruction(instr_code,
+                                           src_reg_2,
+                                           src_reg_1,
+                                           simm13,
+                                           bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+INLINE
+InstrNode*
+register_format9_instruction(CFG*        cfg,
+                             InstrNode*  p_instr,
+                             InstrOffset bytecode_pc,
+                             int         instr_code,
+                             short       intrp_num)
+{
+    InstrNode*    new_instr;
+
+    new_instr = create_format9_instruction(instr_code, intrp_num, bytecode_pc);
+    CFG_RegisterInstr(cfg, new_instr);
+    Instr_connect_instruction(p_instr, new_instr);
+
+    DBG(Instr_Print(new_instr, stdout, '\n'););
+
+    return new_instr;
+}
+
+
+
+
+
+INLINE
+InstrNode*
+register_nop_instruction(CFG* cfg, InstrNode* p_instr, InstrOffset bytecode_pc)
+{
+    return register_format2_instruction(cfg, p_instr, bytecode_pc,
+                                        SETHI, g0, 0);
+}
+
+INLINE
+void
+CFG_UpdateNumOfMaxArgs(CFG* cfg, int arg_num)
+{
+    if (cfg->maxNumOfArgs < arg_num) {
+        cfg->maxNumOfArgs = arg_num;
+    }
+}
+
+INLINE
+bool
+CFG_IsBBEnd(CFG* cfg, InstrNode* c_instr)
+{
+    return (Instr_GetNumOfSuccs(c_instr) == 0 ||
+//          Instr_GetNumOfSuccs(c_instr) > 1 || // branch
+            Instr_IsCTI(c_instr) ||
+            Instr_GetNumOfPreds(Instr_GetSucc(c_instr, 0)) > 1); // join
+}
+
+INLINE
+bool
+CFG_IsBBStart(CFG* cfg, InstrNode* c_instr)
+{
+    return (cfg->root == c_instr ||
+            Instr_GetNumOfPreds(c_instr) > 1 ||
+            CFG_IsBBEnd(cfg, Instr_GetPred(c_instr, 0)));
+}
+
+INLINE
+struct InlineGraph *
+CFG_GetIGRoot(CFG *cfg)
+{
+    return cfg->graphRoot;
+}
+
+/* Name        : CFG_get_var_number
+   Description : get number of the variable
+   Maintainer  : SeungIl Lee <hacker@altair.snu.ac.kr>
+   Pre-condition:
+   
+   Post-condition:
+   
+   Notes:
+       stack variable number is started from total local variable no.
+       temporary variable number is started from total variable no.  */
+INLINE
+int
+CFG_get_var_number(Var var)
+{
+    VarStorageType storage_type;
+    int local_no;
+    int stack_no;
+
+    storage_type = Var_GetStorageType(var);
+    local_no = CFG_GetNumOfLocalVars(cfg);
+    stack_no = CFG_GetNumOfStackVars(cfg);
+
+    switch(storage_type) {
+      case ST_LOCAL:
+        return VAR_NUM_MASK & var;
+      case ST_STACK:
+        return (VAR_NUM_MASK & var) + local_no;
+      case ST_TEMP:
+      case ST_VN:
+        return (VAR_NUM_MASK & var) + local_no + stack_no;
+      case ST_INVALID:
+      default:
+        return var;
+    }
+}
+
+INLINE
+void
+CFG_InitFinallyBlocks( CFG *cfg )
+{
+    cfg->numOfFinallyBlocks = 0;
+}
+
+INLINE
+FinallyBlockInfo*
+CFG_GetFinallyBlockInfo( CFG* cfg, int index )
+{
+    assert( index < cfg->numOfFinallyBlocks );
+    return &cfg->finallyBlocks[index];
+}
+
+INLINE
+int
+CFG_GetNumOfMapNeedInstrs( CFG* cfg )
+{
+    return cfg->numOfMapNeedInstrs;
+}
+
+INLINE
+int
+CFG_GetSizeOfMapPool( CFG *cfg ) {
+    return cfg->sizeOfMapPool;
+}
+
+INLINE
+void
+CFG_SetSizeOfMapPool( CFG *cfg, int size ) {
+    cfg->sizeOfMapPool = size;
+}
+
+INLINE
+void         
+CFG_IncreaseNumOfMapNeedInstrs( CFG *cfg ) {
+    cfg->numOfMapNeedInstrs++;
+}
+
+INLINE
+void         
+CFG_ExpandMapPool( CFG *cfg, int size ) {
+    cfg->sizeOfMapPool += size;
+}
+
+
+#undef DBG

@@ -1,0 +1,80 @@
+/* -*- mode: C -*-
+   bytecode.ic
+   
+   several utility functions to manipulate bytecode
+   
+   Written by: Byung-Sun Yang <scdoner@altair.snu.ac.kr>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties.
+ */
+
+extern const int BCode_opcode_lengths[256];
+extern char *BCode_opcode_names[256];
+
+INLINE
+int
+BCode_get_opcode_len(byte opcode)
+{
+    return BCode_opcode_lengths[opcode];
+}
+
+INLINE
+char *
+BCode_get_opcode_name(byte opcode)
+{
+    return BCode_opcode_names[opcode];
+}
+
+INLINE
+bool
+BCode_is_if_cond_bytecode(byte opcode)
+{
+    return (opcode >= IFEQ && opcode <= IFLE);
+}
+
+INLINE
+int8
+BCode_get_int8(byte *bcode)
+{
+    return (int8) bcode[0];
+}
+
+INLINE
+uint8
+BCode_get_uint8(byte *bcode)
+{
+    return (uint8) bcode[0];
+}
+
+INLINE
+int16
+BCode_get_int16(byte *bcode)
+{
+    return (int16) (bcode[0] << 8 | bcode[1]);
+}
+
+INLINE
+uint16
+BCode_get_uint16(byte *bcode)
+{
+    return (uint16) (bcode[0] << 8 | bcode[1]);
+}
+
+INLINE
+int32
+BCode_get_int32(byte *bcode)
+{
+    return (int32) (bcode[0] << 24 | bcode[1] << 16
+		    | bcode[2] << 8 | bcode[3]);
+}
+
+INLINE
+uint32
+BCode_get_uint32(byte *bcode)
+{
+    return (uint32) (bcode[0] << 24 | bcode[1] << 16
+		     | bcode[2] << 8 | bcode[3]);
+}

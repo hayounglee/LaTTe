@@ -1,0 +1,129 @@
+/* MapVar2TValue.ic
+   
+   inline methods of MapVar2TValue structure.
+   
+   Written by: Suhyun Kim <zelo@i.am>
+   
+   Copyright (C) 1999 MASS Lab., Seoul, Korea.
+   
+   See the file LICENSE for usage and redistribution terms and a
+   disclaimer of all warranties. */
+
+
+//////////////////////////////////////////////////////////////////////
+// static methods....
+//////////////////////////////////////////////////////////////////////
+
+INLINE
+MapVar2TValue*  
+MV2TV_new(int num_of_variables)
+{
+    MapVar2TValue *new_map; 
+
+    new_map = (MapVar2TValue*)FMA_calloc(sizeof(MapVar2TValue)); 
+    if(num_of_variables > 0)
+      new_map->table 
+          = (TypedValue**)FMA_calloc(sizeof(TypedValue*) * num_of_variables); 
+    new_map->size = num_of_variables; 
+
+    return new_map; 
+}
+
+
+INLINE
+MapVar2TValue* 
+MV2TV_clone(MapVar2TValue* source)
+{
+    MapVar2TValue *new_map; 
+
+    new_map = MV2TV_new(source->size); 
+    bcopy(source->table, new_map->table, sizeof(TypedValue*) * source->size);
+
+    return new_map; 
+}
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+// member methods....
+//////////////////////////////////////////////////////////////////////
+
+INLINE
+int
+MV2TV_GetSize(MapVar2TValue* this)
+{
+    assert(this); 
+
+    return this->size; 
+}
+
+
+INLINE
+TypedValue*
+MV2TV_GetByVarNum(MapVar2TValue* this, int var_num)
+{
+    assert(this); 
+    assert(0 <= var_num && var_num < MV2TV_GetSize(this)); 
+
+    return this->table[var_num]; 
+}
+
+
+
+// NOTE:
+// * Be careful of double when using this method !!!!
+//  This method can't handle the problem for you since it has no info 
+//  about the variable. 
+INLINE
+void
+MV2TV_PutByVarNum(MapVar2TValue* this, int var_num, TypedValue* value)
+{
+    assert(this); 
+    assert(0 <= var_num && var_num < MV2TV_GetSize(this)); 
+
+    this->table[var_num] = value; 
+}
+
+
+INLINE
+TypedValue*
+MV2TV_Get(MapVar2TValue* this, Var key)
+{
+    assert(this); 
+    assert(Var_IsVariable(key));
+    assert(0 <= CFG_get_var_number(key) && CFG_get_var_number(key) < this->size); 
+
+    return this->table[CFG_get_var_number(key)]; 
+}
+
+
+INLINE
+void
+MV2TV_Put(MapVar2TValue* this, Var key, TypedValue* value)
+{
+    assert(this); 
+    assert(Var_IsVariable(key));
+    assert(0 <= CFG_get_var_number(key) && CFG_get_var_number(key) < this->size); 
+
+    this->table[CFG_get_var_number(key)] = value; 
+    if(Var_GetType(key) == T_DOUBLE){
+        assert(value == NULL); 
+        assert(CFG_get_var_number(key)+1 < this->size); 
+        this->table[CFG_get_var_number(key)+1] = NULL; 
+    }
+}
+
+
+INLINE
+void
+MV2TV_Clear(MapVar2TValue* this)
+{
+    assert(this); 
+
+    bzero(this->table, sizeof(TypedValue*) * this->size);
+}
+
+
+
+
